@@ -3,6 +3,7 @@ package reset
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -125,8 +126,8 @@ func TestFastResetCodeImplementWithoutRebuilderErrors(t *testing.T) {
 
 func TestNewDefaultsGit(t *testing.T) {
 	r := New(Options{Root: "/repo", Engine: &fakeEngine{}})
-	if r.opts.Git == nil {
-		t.Fatal("Git not defaulted")
+	if r.opts.Git == nil || reflect.ValueOf(r.opts.Git).Pointer() != reflect.ValueOf(DefaultGitCheckout).Pointer() {
+		t.Fatal("Git not defaulted to DefaultGitCheckout")
 	}
 }
 
@@ -168,5 +169,50 @@ func TestDefaultGitCheckoutError(t *testing.T) {
 	err := DefaultGitCheckout(context.Background(), dir, []string{"nope.txt"})
 	if err == nil || !strings.Contains(err.Error(), "git checkout failed") {
 		t.Fatalf("err = %v, want git checkout failed", err)
+	}
+}
+
+func TestHardResetCodeImplementUsesRebuilder(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeRebuilder{}
+	r := New(Options{Root: "/repo", Engine: fe, Git: func(context.Context, string, []string) error { return nil }, Rebuilder: fr})
+	ex := codeExercise()
+	ex.ChapterRef = &content.Chapter{ID: "c1", TopologyName: "lab"}
+	if err := r.Hard(context.Background(), ex); err != nil {
+		t.Fatalf("Hard: %v", err)
+	}
+	if fe.redeploys != 1 || len(fr.called) != 1 {
+		t.Fatalf("redeploys=%d called=%v", fe.redeploys, fr.called)
+	}
+}
+
+func TestHardResetCodeImplementWithoutRebuilderErrors(t *testing.T) {
+	r := New(Options{Root: "/repo", Engine: &fakeEngine{}, Git: func(context.Context, string, []string) error { return nil }})
+	ex := codeExercise()
+	ex.ChapterRef = &content.Chapter{ID: "c1", TopologyName: "lab"}
+	if err := r.Hard(context.Background(), ex); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+type errRebuilder struct{ err error }
+
+func (e errRebuilder) Rebuild(context.Context, *content.Exercise) error { return e.err }
+
+func TestFastResetPropagatesRebuildError(t *testing.T) {
+	sentinel := errors.New("build boom")
+	r := New(Options{Root: "/repo", Engine: &fakeEngine{}, Git: func(context.Context, string, []string) error { return nil }, Rebuilder: errRebuilder{err: sentinel}})
+	if err := r.Fast(context.Background(), codeExercise()); !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestHardResetPropagatesRebuildError(t *testing.T) {
+	sentinel := errors.New("build boom")
+	r := New(Options{Root: "/repo", Engine: &fakeEngine{}, Git: func(context.Context, string, []string) error { return nil }, Rebuilder: errRebuilder{err: sentinel}})
+	ex := codeExercise()
+	ex.ChapterRef = &content.Chapter{ID: "c1", TopologyName: "lab"}
+	if err := r.Hard(context.Background(), ex); !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v", err)
 	}
 }
