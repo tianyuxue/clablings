@@ -37,13 +37,17 @@ type State struct {
 	Exercises map[string]ExerciseState `json:"exercises"`
 }
 
-// CorruptError 表示状态文件损坏并已被隔离为 .bak。
+// CorruptError 表示状态文件损坏；若已成功隔离则 RenameErr 为 nil。
 type CorruptError struct {
-	Path string
-	Err  error
+	Path      string
+	Err       error
+	RenameErr error
 }
 
 func (e *CorruptError) Error() string {
+	if e.RenameErr != nil {
+		return fmt.Sprintf("状态文件损坏，隔离到 %s.bak 失败: %v（原始错误: %v）", e.Path, e.RenameErr, e.Err)
+	}
 	return fmt.Sprintf("状态文件损坏，已隔离到 %s.bak: %v", e.Path, e.Err)
 }
 
@@ -62,8 +66,8 @@ func Load(root string) (*State, error) {
 
 	var st State
 	if err := json.Unmarshal(data, &st); err != nil {
-		_ = os.Rename(path, path+".bak")
-		return newState(), &CorruptError{Path: path, Err: err}
+		renameErr := os.Rename(path, path+".bak")
+		return newState(), &CorruptError{Path: path, Err: err, RenameErr: renameErr}
 	}
 	if st.Exercises == nil {
 		st.Exercises = map[string]ExerciseState{}
@@ -106,7 +110,18 @@ func (s *State) Save(root string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, filepath.Join(root, StateFileName))
+	if err := os.Rename(tmpName, filepath.Join(root, StateFileName)); err != nil {
+		return err
+	}
+	dir, err := os.Open(root)
+	if err != nil {
+		return fmt.Errorf("打开父目录以 fsync: %w", err)
+	}
+	if err := dir.Sync(); err != nil {
+		dir.Close()
+		return fmt.Errorf("fsync 父目录: %w", err)
+	}
+	return dir.Close()
 }
 
 // SetCurrent 记录当前题目。

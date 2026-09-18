@@ -59,3 +59,53 @@ func TestLoadCorruptQuarantines(t *testing.T) {
 		t.Fatalf("期望隔离文件存在: %v", err)
 	}
 }
+
+func TestGetHitAndMiss(t *testing.T) {
+	st := newState()
+	if got := st.Get("missing"); got.Status != StatusTodo {
+		t.Fatalf("miss status = %q", got.Status)
+	}
+	st.Upsert("x", StatusInProgress, 2)
+	got := st.Get("x")
+	if got.Status != StatusInProgress || got.Attempts != 2 {
+		t.Fatalf("hit = %+v", got)
+	}
+
+	var nilMap State
+	if got := nilMap.Get("x"); got.Status != StatusTodo {
+		t.Fatalf("nil map miss status = %q", got.Status)
+	}
+}
+
+func TestSaveMissingRootErrorsNoTempLitter(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "does-not-exist")
+	st := newState()
+	if err := st.Save(root); err == nil {
+		t.Fatal("期望 Save 报错")
+	}
+	matches, err := filepath.Glob(filepath.Join(parent, StateFileName+".tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("不应残留临时文件: %v", matches)
+	}
+}
+
+func TestLoadNormalizesVersionZero(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, StateFileName)
+	data := []byte(`{"version":0,"exercises":{"a":{"status":"passed","attempts":1}}}`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if st.Version != 1 {
+		t.Fatalf("version = %d, 期望 1", st.Version)
+	}
+}
