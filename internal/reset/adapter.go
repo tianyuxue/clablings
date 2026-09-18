@@ -36,12 +36,18 @@ func (a *engineAdapter) Redeploy(ctx context.Context, ch *content.Chapter) error
 }
 
 // runHostCommands runs host-side commands in order, stopping at the first failure.
+// Like engine.execRunner, it maps context cancellation to ctx.Err() and bounds
+// the wait for orphaned descendants holding inherited pipes.
 func runHostCommands(ctx context.Context, cmds []string) error {
 	for _, c := range cmds {
 		cmd := exec.CommandContext(ctx, "sh", "-lc", c)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.WaitDelay = 5 * time.Second
 		if err := cmd.Run(); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return fmt.Errorf("%q: %w", c, err)
 		}
 	}
