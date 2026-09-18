@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,5 +39,125 @@ func TestFormatLibraryText(t *testing.T) {
 	}
 	if !strings.Contains(out, "· 01_arp 实现 ARP responder") {
 		t.Fatalf("缺少未开始标记:\n%s", out)
+	}
+}
+
+func writeTempLibrary(t *testing.T, root string) {
+	t.Helper()
+	writeCLIFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters:\n  - chapters/c1\n")
+	writeCLIFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: 章一\ntopology: topology.clab.yml\n")
+	writeCLIFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), "name: lab-c1\ntopology:\n  nodes: {}\n")
+	writeCLIFile(t, filepath.Join(root, "chapters", "c1", "exercises", "e1", "exercise.yaml"), "id: e1\ntitle: 题一\ntype: config-fix\n")
+}
+
+func writeCLIFile(t *testing.T, path, s string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestListCommandText(t *testing.T) {
+	root := t.TempDir()
+	writeTempLibrary(t, root)
+
+	cmd := NewRootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"list", "--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "c1 章一") {
+		t.Fatalf("缺少章节行:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "· e1 题一") {
+		t.Fatalf("缺少题目行:\n%s", out.String())
+	}
+}
+
+func TestListCommandJSON(t *testing.T) {
+	root := t.TempDir()
+	writeTempLibrary(t, root)
+
+	cmd := NewRootCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"list", "--root", root, "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	var got struct {
+		Root     string `json:"root"`
+		Chapters []struct {
+			ID        string `json:"id"`
+			Exercises []struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+			} `json:"exercises"`
+		} `json:"chapters"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, out.String())
+	}
+	if got.Root != root {
+		t.Fatalf("root = %q, 期望 %q", got.Root, root)
+	}
+	if len(got.Chapters) != 1 || got.Chapters[0].ID != "c1" {
+		t.Fatalf("chapters = %+v", got.Chapters)
+	}
+	if len(got.Chapters[0].Exercises) != 1 {
+		t.Fatalf("exercises = %+v", got.Chapters[0].Exercises)
+	}
+	ex := got.Chapters[0].Exercises[0]
+	if ex.ID != "e1" || ex.Status != "todo" {
+		t.Fatalf("exercise = %+v", ex)
+	}
+}
+
+func TestListCommandCorruptStateWarns(t *testing.T) {
+	root := t.TempDir()
+	writeTempLibrary(t, root)
+	writeCLIFile(t, filepath.Join(root, state.StateFileName), "{not json")
+
+	cmd := NewRootCmd()
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"list", "--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "e1 题一") {
+		t.Fatalf("stdout 缺少题目行:\n%s", out.String())
+	}
+	if !strings.Contains(errOut.String(), "警告:") {
+		t.Fatalf("stderr 缺少警告:\n%s", errOut.String())
+	}
+}
+
+func TestResolveRootPrecedence(t *testing.T) {
+	root := t.TempDir()
+	writeTempLibrary(t, root)
+	t.Setenv("CLABLINGS_ROOT", root)
+
+	got, err := resolveRoot("")
+	if err != nil {
+		t.Fatalf("resolveRoot(\"\"): %v", err)
+	}
+	if got != root {
+		t.Fatalf("resolveRoot(\"\") = %q, 期望 %q", got, root)
+	}
+
+	got, err = resolveRoot(root)
+	if err != nil {
+		t.Fatalf("resolveRoot(root): %v", err)
+	}
+	if got != root {
+		t.Fatalf("resolveRoot(root) = %q, 期望 %q", got, root)
 	}
 }

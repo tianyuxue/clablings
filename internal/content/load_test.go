@@ -111,6 +111,7 @@ func TestLoadErrors(t *testing.T) {
 		},
 		{
 			name: "manifest chapters 为空",
+			want: "chapters 为空",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters: []\n")
 			},
@@ -150,6 +151,7 @@ func TestLoadErrors(t *testing.T) {
 		},
 		{
 			name: "exercise 非法 type",
+			want: "非法 type",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
