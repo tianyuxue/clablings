@@ -2,7 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestExecRunnerCapturesOutputAndExitCode(t *testing.T) {
@@ -23,7 +26,26 @@ func TestExecRunnerCapturesOutputAndExitCode(t *testing.T) {
 }
 
 func TestExecRunnerMissingBinaryReturnsError(t *testing.T) {
-	if _, err := (execRunner{}).Run(context.Background(), "definitely-not-a-binary-xyz"); err == nil {
-		t.Fatal("expected a start error, got nil")
+	if _, err := (execRunner{}).Run(context.Background(), "definitely-not-a-binary-xyz"); !errors.Is(err, exec.ErrNotFound) {
+		t.Fatalf("err = %v, want exec.ErrNotFound", err)
+	}
+}
+
+func TestExecRunnerContextCanceledReturnsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	errc := make(chan error, 1)
+	go func() {
+		_, err := (execRunner{}).Run(ctx, "sh", "-c", "exec sleep 5")
+		errc <- err
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-errc:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after cancel")
 	}
 }

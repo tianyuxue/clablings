@@ -32,6 +32,9 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (Result,
 	err := cmd.Run()
 	res := Result{Stdout: out.String(), Stderr: errb.String()}
 	if err != nil {
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			res.Code = ee.ExitCode()
