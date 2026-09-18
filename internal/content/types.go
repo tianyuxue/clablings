@@ -120,8 +120,9 @@ type Exercise struct {
 	Run        *RunSpec      `yaml:"run"`
 	Assertions []Assertion   `yaml:"assertions"`
 
-	Dir     string `yaml:"-"`
-	Chapter string `yaml:"-"`
+	Dir        string   `yaml:"-"`
+	Chapter    string   `yaml:"-"`
+	ChapterRef *Chapter `yaml:"-"`
 }
 
 // FullID returns the fully qualified ID: chapter-id/exercise-id.

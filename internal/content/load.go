@@ -52,6 +52,7 @@ func Load(root string) (*Library, error) {
 			if _, dup := lib.ByID[ex.FullID()]; dup {
 				return nil, fmt.Errorf("duplicate exercise ID: %s", ex.FullID())
 			}
+			ex.ChapterRef = ch
 			ch.Exercises = append(ch.Exercises, ex)
 			lib.ByID[ex.FullID()] = ex
 			lib.Order = append(lib.Order, ex)
