@@ -95,24 +95,35 @@ func TestWatcherScansAllFiles(t *testing.T) {
 
 func TestWatcherMissingFileErrorsWithoutLosingPriorChange(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "a.c"), "one\n")
-	write(t, filepath.Join(dir, "b.c"), "two\n")
+	aPath := filepath.Join(dir, "a.c")
+	bPath := filepath.Join(dir, "b.c")
+	write(t, aPath, "one\n")
+	write(t, bPath, "two\n")
 	ex := &content.Exercise{Dir: dir, Files: []content.FileMapping{{Source: "a.c"}, {Source: "b.c"}}}
 	w := NewWatcher(ex, 10*time.Millisecond)
 	if _, err := w.Scan(); err != nil {
 		t.Fatalf("first Scan: %v", err)
 	}
 
+	origInfo, err := os.Stat(bPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(15 * time.Millisecond)
-	write(t, filepath.Join(dir, "a.c"), "one-changed\n")
-	if err := os.Remove(filepath.Join(dir, "b.c")); err != nil {
+	write(t, aPath, "one-changed\n")
+	if err := os.Remove(bPath); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.Scan(); err == nil {
 		t.Fatal("expected error for missing watched file")
 	}
-	write(t, filepath.Join(dir, "b.c"), "two\n")
-	time.Sleep(15 * time.Millisecond)
+
+	// Restore b.c with identical content and mtime so only a.c's earlier change
+	// can make the next scan report a change.
+	write(t, bPath, "two\n")
+	if err := os.Chtimes(bPath, origInfo.ModTime(), origInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
 	changed, err := w.Scan()
 	if err != nil {
 		t.Fatalf("Scan after restore: %v", err)
