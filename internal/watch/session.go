@@ -6,7 +6,6 @@ import (
 
 	"github.com/tianyuxue/clablings/internal/assert"
 	"github.com/tianyuxue/clablings/internal/content"
-	"github.com/tianyuxue/clablings/internal/engine"
 	"github.com/tianyuxue/clablings/internal/state"
 )
 
@@ -14,7 +13,6 @@ import (
 type Engine interface {
 	Deploy(ctx context.Context, ch *content.Chapter) error
 	Destroy(ctx context.Context, ch *content.Chapter) error
-	Topology(ctx context.Context, ch *content.Chapter) (*engine.Topology, error)
 }
 
 // Resetter is the two-tier reset capability.
@@ -51,7 +49,7 @@ type Session struct {
 // New builds a Session.
 func New(opts Options) *Session { return &Session{opts: opts} }
 
-// Current returns the current exercise.
+// Current returns the current exercise, or nil when the library is complete.
 func (s *Session) Current() *content.Exercise { return s.current }
 
 // Start locates the current exercise, ensures its topology is deployed, and runs setup.
@@ -60,7 +58,7 @@ func (s *Session) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return s.activate(ctx, ex, true)
+	return s.activate(ctx, ex)
 }
 
 // Run jumps to the given exercise and loads it. id may be a fully qualified ID
@@ -70,7 +68,7 @@ func (s *Session) Run(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return s.activate(ctx, ex, true)
+	return s.activate(ctx, ex)
 }
 
 func (s *Session) resolveExercise(id string) (*content.Exercise, error) {
@@ -87,13 +85,16 @@ func (s *Session) resolveExercise(id string) (*content.Exercise, error) {
 		}
 	}
 	if found == nil {
-		return nil, fmt.Errorf("unknown exercise %s", id)
+		return nil, fmt.Errorf("unknown exercise %q", id)
 	}
 	return found, nil
 }
 
 // VerifyNow runs one verification; on pass it advances to the next exercise.
 func (s *Session) VerifyNow(ctx context.Context) error {
+	if s.current == nil {
+		return fmt.Errorf("no active exercise")
+	}
 	if s.busy {
 		return nil
 	}
@@ -118,8 +119,7 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 	if !passed {
 		es := s.opts.State.Get(ex.FullID())
 		s.opts.State.Upsert(ex.FullID(), state.StatusInProgress, es.Attempts+1)
-		_ = s.opts.State.Save(s.opts.Library.Root)
-		return nil
+		return s.opts.State.Save(s.opts.Library.Root)
 	}
 
 	es := s.opts.State.Get(ex.FullID())
@@ -128,6 +128,7 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 	next := s.next(ex)
 	if next == nil {
 		s.opts.State.SetCurrent("")
+		s.current = nil
 		return s.opts.State.Save(s.opts.Library.Root)
 	}
 	return s.advance(ctx, ex, next)
@@ -158,18 +159,25 @@ func (s *Session) next(ex *content.Exercise) *content.Exercise {
 }
 
 // activate ensures the exercise's chapter is deployed and runs setup (fast reset).
-func (s *Session) activate(ctx context.Context, ex *content.Exercise, ensureDeploy bool) error {
-	if ensureDeploy && (s.chapter == nil || s.chapter.ID != ex.ChapterRef.ID) {
+func (s *Session) activate(ctx context.Context, ex *content.Exercise) error {
+	if s.chapter == nil || s.chapter.ID != ex.ChapterRef.ID {
 		if s.chapter != nil {
 			if err := s.opts.Engine.Destroy(ctx, s.chapter); err != nil {
 				return err
 			}
+			s.chapter = nil
 		}
 		if err := s.opts.Engine.Deploy(ctx, ex.ChapterRef); err != nil {
 			return err
 		}
 	}
 	s.chapter = ex.ChapterRef
+	return s.setActiveAndReset(ctx, ex)
+}
+
+// setActiveAndReset records ex as the current exercise, persists state (without
+// downgrading an already-passed exercise), and runs the fast reset.
+func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) error {
 	s.current = ex
 	s.opts.State.SetCurrent(ex.FullID())
 	es := s.opts.State.Get(ex.FullID())
@@ -182,37 +190,21 @@ func (s *Session) activate(ctx context.Context, ex *content.Exercise, ensureDepl
 	return s.opts.Reset.Fast(ctx, ex)
 }
 
-// advance handles switching to the next exercise after a pass and persists state.
+// advance switches to the next exercise after a pass and persists state.
 func (s *Session) advance(ctx context.Context, from, next *content.Exercise) error {
-	sameChapter := from.ChapterRef.ID == next.ChapterRef.ID
-	if sameChapter {
-		s.current = next
-		s.opts.State.SetCurrent(next.FullID())
-		es := s.opts.State.Get(next.FullID())
-		if es.Status != state.StatusPassed {
-			s.opts.State.Upsert(next.FullID(), state.StatusInProgress, es.Attempts)
-		}
-		if err := s.opts.State.Save(s.opts.Library.Root); err != nil {
+	if from.ChapterRef.ID == next.ChapterRef.ID {
+		return s.setActiveAndReset(ctx, next)
+	}
+	// Cross chapter: destroy the current chapter (if any), then deploy the next.
+	if s.chapter != nil {
+		if err := s.opts.Engine.Destroy(ctx, s.chapter); err != nil {
 			return err
 		}
-		return s.opts.Reset.Fast(ctx, next)
-	}
-	// Cross chapter: destroy the current chapter, deploy the next.
-	if err := s.opts.Engine.Destroy(ctx, s.chapter); err != nil {
-		return err
+		s.chapter = nil
 	}
 	if err := s.opts.Engine.Deploy(ctx, next.ChapterRef); err != nil {
 		return err
 	}
 	s.chapter = next.ChapterRef
-	s.current = next
-	s.opts.State.SetCurrent(next.FullID())
-	es := s.opts.State.Get(next.FullID())
-	if es.Status != state.StatusPassed {
-		s.opts.State.Upsert(next.FullID(), state.StatusInProgress, es.Attempts)
-	}
-	if err := s.opts.State.Save(s.opts.Library.Root); err != nil {
-		return err
-	}
-	return s.opts.Reset.Fast(ctx, next)
+	return s.setActiveAndReset(ctx, next)
 }

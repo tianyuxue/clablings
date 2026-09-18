@@ -6,7 +6,6 @@ import (
 
 	"github.com/tianyuxue/clablings/internal/assert"
 	"github.com/tianyuxue/clablings/internal/content"
-	"github.com/tianyuxue/clablings/internal/engine"
 	"github.com/tianyuxue/clablings/internal/state"
 )
 
@@ -19,9 +18,6 @@ func (f *fakeEngine) Deploy(_ context.Context, ch *content.Chapter) error {
 func (f *fakeEngine) Destroy(_ context.Context, ch *content.Chapter) error {
 	f.destroyed = append(f.destroyed, ch.ID)
 	return nil
-}
-func (f *fakeEngine) Topology(context.Context, *content.Chapter) (*engine.Topology, error) {
-	return &engine.Topology{}, nil
 }
 
 type fakeReset struct{ fast, hard []string }
@@ -118,5 +114,145 @@ func TestSessionCrossChapterRedeploys(t *testing.T) {
 	}
 	if s.Current().FullID() != "c2/e3" {
 		t.Fatalf("current = %v", s.Current())
+	}
+}
+
+func TestSessionVerifyFailKeepsCurrent(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: fe, Reset: fr,
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: false}}, nil
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := s.VerifyNow(context.Background()); err != nil {
+		t.Fatalf("VerifyNow: %v", err)
+	}
+	if s.Current().FullID() != "c1/e1" {
+		t.Fatalf("current = %v", s.Current())
+	}
+	es := st.Get("c1/e1")
+	if es.Status != state.StatusInProgress || es.Attempts != 1 {
+		t.Fatalf("exercise state = %+v", es)
+	}
+	if len(fr.fast) != 1 {
+		t.Fatalf("fast resets = %v", fr.fast)
+	}
+}
+
+func TestSessionRunResolvesAndRejects(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := s.Run(context.Background(), "e2"); err != nil {
+		t.Fatalf("Run e2: %v", err)
+	}
+	if s.Current().FullID() != "c1/e2" {
+		t.Fatalf("current = %v", s.Current())
+	}
+	if err := s.Run(context.Background(), "nope"); err == nil {
+		t.Fatal("expected unknown exercise error")
+	}
+
+	ch1 := &content.Chapter{ID: "c1", TopologyName: "l1"}
+	ch2 := &content.Chapter{ID: "c2", TopologyName: "l2"}
+	d1 := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch1}
+	d2 := &content.Exercise{ID: "e1", Chapter: "c2", ChapterRef: ch2}
+	dup := &content.Library{Root: t.TempDir(), Order: []*content.Exercise{d1, d2},
+		ByID: map[string]*content.Exercise{"c1/e1": d1, "c2/e1": d2}}
+	dst, _ := state.Load(dup.Root)
+	ds := New(Options{Library: dup, State: dst, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := ds.Run(context.Background(), "e1"); err == nil {
+		t.Fatal("expected duplicate ID error")
+	}
+}
+
+func TestSessionResumesFromState(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	st.SetCurrent("c1/e2")
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if s.Current().FullID() != "c1/e2" {
+		t.Fatalf("current = %v", s.Current())
+	}
+}
+
+func TestSessionCompletionClearsCurrent(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.VerifyNow(context.Background()); err != nil {
+			t.Fatalf("VerifyNow %d: %v", i, err)
+		}
+	}
+	if s.Current() != nil {
+		t.Fatalf("current = %v, want nil after completion", s.Current())
+	}
+	if st.Current != "" {
+		t.Fatalf("state current = %q, want empty", st.Current)
+	}
+	if err := s.VerifyNow(context.Background()); err == nil {
+		t.Fatal("expected error verifying with no active exercise")
+	}
+}
+
+func TestSessionEmptyLibrary(t *testing.T) {
+	lib := &content.Library{Root: t.TempDir(), ByID: map[string]*content.Exercise{}}
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := s.Start(context.Background()); err == nil {
+		t.Fatal("expected empty library error")
+	}
+}
+
+func TestSessionBusyGuard(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	var s *Session
+	s = New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			if err := s.VerifyNow(context.Background()); err != nil {
+				t.Errorf("re-entrant VerifyNow: %v", err)
+			}
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.VerifyNow(context.Background()); err != nil {
+		t.Fatalf("VerifyNow: %v", err)
 	}
 }
