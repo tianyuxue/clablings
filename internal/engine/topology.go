@@ -52,7 +52,7 @@ func ParseTopology(path string) (*Topology, error) {
 	}
 	var raw rawTopology
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: parse topology: %w", path, err)
 	}
 	t := &Topology{Name: raw.Name}
 	if t.Name == "" {
@@ -67,17 +67,17 @@ func ParseTopology(path string) (*Topology, error) {
 		n := raw.Topology.Nodes[name]
 		t.Nodes = append(t.Nodes, TopoNode{Name: name, Kind: n.Kind, Image: n.Image})
 	}
-	for _, l := range raw.Topology.Links {
+	for i, l := range raw.Topology.Links {
 		if len(l.Endpoints) != 2 {
-			return nil, fmt.Errorf("%s: a link must have exactly 2 endpoints: %v", path, l.Endpoints)
+			return nil, fmt.Errorf("%s: link %d must have exactly 2 endpoints: %v", path, i, l.Endpoints)
 		}
 		a, pa, err := splitEndpoint(l.Endpoints[0])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: link %d endpoint %q: %w", path, i, l.Endpoints[0], err)
 		}
 		b, pb, err := splitEndpoint(l.Endpoints[1])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: link %d endpoint %q: %w", path, i, l.Endpoints[1], err)
 		}
 		t.Links = append(t.Links, TopoLink{A: a, PortA: pa, B: b, PortB: pb})
 	}
