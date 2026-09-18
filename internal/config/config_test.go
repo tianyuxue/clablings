@@ -102,8 +102,23 @@ func TestLoadFromInvalidYAML(t *testing.T) {
 	if err := os.WriteFile(path, []byte("build: [unclosed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadFrom(path); err == nil {
+	cfg, err := LoadFrom(path)
+	if err == nil {
 		t.Fatal("invalid YAML should return an error")
+	}
+	if cfg == nil || cfg.Watch.PollInterval != defaultPollInterval || cfg.Build.DefaultImage != defaultBuildImage {
+		t.Fatalf("invalid YAML should still return a usable default config, got %+v", cfg)
+	}
+}
+
+func TestLoadFromReadErrorReturnsDefaults(t *testing.T) {
+	dir := t.TempDir() // a directory cannot be read as a file
+	cfg, err := LoadFrom(dir)
+	if err == nil {
+		t.Fatal("reading a directory should return an error")
+	}
+	if cfg == nil || cfg.Watch.Debounce != defaultDebounce {
+		t.Fatalf("read error should still return defaults, got %+v", cfg)
 	}
 }
 

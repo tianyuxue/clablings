@@ -54,10 +54,12 @@ func LoadFrom(path string) (*Config, error) {
 		return cfg, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
+		// Return a usable default configuration alongside the error so callers
+		// that only warn can keep running safely.
+		return defaults(), fmt.Errorf("read config %s: %w", path, err)
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
+		return defaults(), fmt.Errorf("parse config %s: %w", path, err)
 	}
 	if cfg.Watch.PollInterval <= 0 {
 		cfg.Watch.PollInterval = defaultPollInterval
