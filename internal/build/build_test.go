@@ -2,12 +2,14 @@ package build
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
@@ -90,5 +92,36 @@ func TestBuildCompileFailureReturnsOutput(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "expected ';'") {
 		t.Fatalf("error missing compiler output: %v", err)
+	}
+}
+
+func TestBuildErrors(t *testing.T) {
+	dir := t.TempDir()
+
+	// missing build spec
+	if _, err := New(&fakeRunner{}, "docker", "gcc:13").Build(context.Background(), &content.Exercise{ID: "01", Dir: dir}); err == nil {
+		t.Fatal("expected error for missing build spec")
+	}
+
+	ex := &content.Exercise{ID: "01", Dir: dir, Build: &content.BuildSpec{Command: "make", Output: "out"}}
+
+	// runner start failure
+	fr := &fakeRunner{errs: []error{errors.New("start failed")}}
+	if _, err := New(fr, "docker", "gcc:13").Build(context.Background(), ex); err == nil {
+		t.Fatal("expected runner error")
+	}
+
+	// build ok but artifact missing
+	if _, err := New(&fakeRunner{}, "docker", "gcc:13").Build(context.Background(), ex); err == nil {
+		t.Fatal("expected missing artifact error")
+	}
+}
+
+func TestExerciseTimeout(t *testing.T) {
+	if got := exerciseTimeout(&content.Exercise{Timeout: "5s"}); got != 5*time.Second {
+		t.Fatalf("exerciseTimeout = %v, want 5s", got)
+	}
+	if got := exerciseTimeout(&content.Exercise{}); got != 30*time.Second {
+		t.Fatalf("exerciseTimeout default = %v, want 30s", got)
 	}
 }

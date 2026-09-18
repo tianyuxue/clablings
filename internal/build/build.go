@@ -43,14 +43,18 @@ func (b *Builder) Build(ctx context.Context, ex *content.Exercise) (string, erro
 		"-v", ex.Dir+":/src", "-w", "/src",
 		image, "sh", "-lc", ex.Build.Command)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("build %s failed to start: %w", ex.FullID(), err)
 	}
 	if res.Code != 0 {
-		return "", fmt.Errorf("build failed (code=%d):\n%s%s", res.Code, res.Stdout, res.Stderr)
+		return "", fmt.Errorf("build failed (code=%d):\n%s\n%s", res.Code, res.Stdout, res.Stderr)
 	}
 	out := filepath.Join(ex.Dir, ex.Build.Output)
-	if _, err := os.Stat(out); err != nil {
+	st, err := os.Stat(out)
+	if err != nil {
 		return "", fmt.Errorf("build succeeded but artifact %s not found: %w", ex.Build.Output, err)
+	}
+	if st.IsDir() {
+		return "", fmt.Errorf("build output %s is a directory, expected a file", ex.Build.Output)
 	}
 	return out, nil
 }
