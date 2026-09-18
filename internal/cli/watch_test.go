@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,6 +102,46 @@ func TestWatchLoopEnterCompletes(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "all exercises complete") {
 		t.Fatalf("out = %q", out.String())
+	}
+}
+
+func TestWatchLoopVerifyErrorDoesNotPanic(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, errors.New("boom")
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	enterCh := make(chan struct{}, 1)
+	tick := make(chan time.Time, 2)
+	enterCh <- struct{}{}
+
+	var out, errOut bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, enterCh, tick, &out, &errOut) }()
+
+	time.Sleep(20 * time.Millisecond) // let enter be processed
+	tick <- time.Now()                // previously panicked on the nil watcher
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("watchLoop: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watchLoop did not return after cancel")
+	}
+	if !strings.Contains(errOut.String(), "verify error") {
+		t.Fatalf("errOut = %q", errOut.String())
 	}
 }
 

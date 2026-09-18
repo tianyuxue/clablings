@@ -94,7 +94,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, enterCh <-chan struct{}, tick <-chan time.Time, out, errOut io.Writer) error {
 	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := w.Scan(); err != nil {
-		return err
+		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
 	for {
 		select {
@@ -108,7 +108,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			if done {
 				return nil
 			}
-			w = next
+			if next != nil {
+				w = next
+			}
 		case <-tick:
 			if _, err := w.Scan(); err != nil {
 				continue
@@ -122,7 +124,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if done {
 					return nil
 				}
-				w = next
+				if next != nil {
+					w = next
+				}
 			}
 		}
 	}
@@ -130,6 +134,8 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 
 // verifyAndReload verifies the current exercise and, unless the library is
 // complete, returns a fresh watcher for the (possibly new) current exercise.
+// On verify failure it returns (nil, false, nil) so the caller keeps using the
+// existing watcher.
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
 	if err := sess.VerifyNow(ctx); err != nil {
 		fmt.Fprintf(errOut, "verify error: %v\n", err)
@@ -141,7 +147,7 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 	}
 	nw := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := nw.Scan(); err != nil {
-		return nil, false, err
+		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
 	return nw, false, nil
 }
