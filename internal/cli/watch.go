@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -30,17 +32,17 @@ func newWatchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runWatch(cmd.Context(), resolved, "")
+			return runWatch(cmd.Context(), resolved, "", cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
 	return cmd
 }
 
-func runWatch(ctx context.Context, root, initialID string) error {
+func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer) error {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: reading config failed, using defaults: %v\n", err)
+		fmt.Fprintf(errOut, "warning: reading config failed, using defaults: %v\n", err)
 	}
 	clabBin := binOr(cfg.Containerlab.BinPath, "containerlab")
 	dockerBin := binOr(cfg.Docker.BinPath, "docker")
@@ -51,7 +53,11 @@ func runWatch(ctx context.Context, root, initialID string) error {
 	}
 	st, err := state.Load(root)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		var corrupt *state.CorruptError
+		if !errors.As(err, &corrupt) {
+			return err
+		}
+		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
 	eng := engine.New(clabBin, dockerBin)
 	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng)})
@@ -61,7 +67,7 @@ func runWatch(ctx context.Context, root, initialID string) error {
 		Engine:  newLifecycleAdapter(eng),
 		Reset:   res,
 		Verify:  makeVerifier(eng),
-		Report:  func(r []assert.Result) { report.Text(os.Stdout, r) },
+		Report:  func(r []assert.Result) { report.Text(out, r) },
 	})
 	if initialID != "" {
 		if err := sess.Run(ctx, initialID); err != nil {
@@ -70,7 +76,7 @@ func runWatch(ctx context.Context, root, initialID string) error {
 	} else if err := sess.Start(ctx); err != nil {
 		return err
 	}
-	printProgress(sess, lib)
+	printProgress(sess, lib, out)
 
 	ticker := time.NewTicker(cfg.Watch.PollInterval)
 	defer ticker.Stop()
@@ -79,13 +85,13 @@ func runWatch(ctx context.Context, root, initialID string) error {
 			defer term.Restore(int(os.Stdin.Fd()), raw)
 			enterCh := make(chan struct{}, 1)
 			go watch.ReadEnter(os.Stdin, enterCh)
-			return watchLoop(ctx, sess, lib, cfg, enterCh, ticker.C)
+			return watchLoop(ctx, sess, lib, cfg, enterCh, ticker.C, out, errOut)
 		}
 	}
-	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C)
+	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C, out, errOut)
 }
 
-func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, enterCh <-chan struct{}, tick <-chan time.Time) error {
+func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, enterCh <-chan struct{}, tick <-chan time.Time, out, errOut io.Writer) error {
 	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := w.Scan(); err != nil {
 		return err
@@ -95,51 +101,55 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		case <-ctx.Done():
 			return nil
 		case <-enterCh:
-			done, err := verifyAndReload(ctx, sess, lib, &w, cfg)
+			next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 			if err != nil {
 				return err
 			}
 			if done {
 				return nil
 			}
+			w = next
 		case <-tick:
 			if _, err := w.Scan(); err != nil {
 				continue
 			}
 			if w.ReadyToVerify() {
 				w.Consume()
-				done, err := verifyAndReload(ctx, sess, lib, &w, cfg)
+				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 				if err != nil {
 					return err
 				}
 				if done {
 					return nil
 				}
+				w = next
 			}
 		}
 	}
 }
 
 // verifyAndReload verifies the current exercise and, unless the library is
-// complete, resets the watcher for the (possibly new) current exercise.
-func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, w **watch.Watcher, cfg *config.Config) (bool, error) {
+// complete, returns a fresh watcher for the (possibly new) current exercise.
+func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
 	if err := sess.VerifyNow(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "verify error: %v\n", err)
-		return false, nil
+		fmt.Fprintf(errOut, "verify error: %v\n", err)
+		return nil, false, nil
 	}
-	printProgress(sess, lib)
+	printProgress(sess, lib, out)
 	if sess.Current() == nil {
-		return true, nil
+		return nil, true, nil
 	}
-	*w = watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
-	_, _ = (*w).Scan()
-	return false, nil
+	nw := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
+	if _, err := nw.Scan(); err != nil {
+		return nil, false, err
+	}
+	return nw, false, nil
 }
 
-func printProgress(sess *watch.Session, lib *content.Library) {
+func printProgress(sess *watch.Session, lib *content.Library, out io.Writer) {
 	cur := sess.Current()
 	if cur == nil {
-		fmt.Println("all exercises complete")
+		fmt.Fprintln(out, "all exercises complete")
 		return
 	}
 	total := len(lib.Order)
@@ -151,5 +161,5 @@ func printProgress(sess *watch.Session, lib *content.Library) {
 		}
 	}
 	name := filepath.Base(cur.Dir)
-	fmt.Printf("[%d/%d] %s: In Progress\n", idx, total, name)
+	fmt.Fprintf(out, "[%d/%d] %s: In Progress\n", idx, total, name)
 }

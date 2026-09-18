@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"time"
 
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
@@ -17,39 +15,20 @@ func FromEngine(e *engine.Engine) Engine { return &engineAdapter{e: e} }
 type engineAdapter struct{ e *engine.Engine }
 
 func (a *engineAdapter) Redeploy(ctx context.Context, ch *content.Chapter) error {
-	if err := runHostCommands(ctx, ch.Teardown); err != nil {
+	if err := engine.RunHostCommands(ctx, ch.Teardown); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: chapter %s teardown failed: %v\n", ch.ID, err)
 	}
-	rctx, cancel := context.WithTimeout(ctx, deployTimeout(ch))
+	rctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
 	defer cancel()
-	res, err := a.e.Redeploy(rctx, ch.TopologyPath, deployTimeout(ch))
+	res, err := a.e.Redeploy(rctx, ch.TopologyPath, engine.ChapterDeployTimeout(ch))
 	if err != nil {
 		return err
 	}
 	if res.Code != 0 {
 		return fmt.Errorf("containerlab redeploy failed (code=%d): %s", res.Code, res.Stderr)
 	}
-	if err := runHostCommands(rctx, ch.Setup); err != nil {
+	if err := engine.RunHostCommands(rctx, ch.Setup); err != nil {
 		return fmt.Errorf("chapter %s setup failed: %w", ch.ID, err)
-	}
-	return nil
-}
-
-// runHostCommands runs host-side commands in order, stopping at the first failure.
-// Like engine.execRunner, it maps context cancellation to ctx.Err() and bounds
-// the wait for orphaned descendants holding inherited pipes.
-func runHostCommands(ctx context.Context, cmds []string) error {
-	for _, c := range cmds {
-		cmd := exec.CommandContext(ctx, "sh", "-lc", c)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.WaitDelay = 5 * time.Second
-		if err := cmd.Run(); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return fmt.Errorf("%q: %w", c, err)
-		}
 	}
 	return nil
 }
@@ -67,11 +46,4 @@ func (a *engineAdapter) Exec(ctx context.Context, node, cmd string) error {
 		return fmt.Errorf("command on %s failed (code=%d): %s", node, res.Code, res.Stderr)
 	}
 	return nil
-}
-
-func deployTimeout(ch *content.Chapter) time.Duration {
-	if d, err := time.ParseDuration(ch.Deploy.Timeout); err == nil && d > 0 {
-		return d
-	}
-	return 2 * time.Minute
 }
