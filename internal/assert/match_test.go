@@ -123,3 +123,9 @@ func TestMatchJSON(t *testing.T) {
 		t.Fatalf("want failure, ok=%v err=%v", ok, err)
 	}
 }
+
+func TestMatchJSONInvalidRegexPropagates(t *testing.T) {
+	if _, _, err := matchJSON(`{"a":"x"}`, "$.a", content.TextMatch{Regex: "("}); err == nil {
+		t.Fatal("expected regex compile error from matchJSON")
+	}
+}
