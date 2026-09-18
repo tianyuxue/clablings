@@ -1,0 +1,4 @@
+# clablings 构建产物
+/clablings
+*.test
+/dist/
