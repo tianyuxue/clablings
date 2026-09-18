@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tianyuxue/clablings/internal/content"
@@ -72,7 +73,7 @@ func TestRunFileBranches(t *testing.T) {
 		{"host read error", content.Assertion{Type: "file", Source: "missing.txt"}, engine.Result{}, nil, false, true},
 		{"node contains pass", content.Assertion{Type: "file", Node: "r1", Path: "/f", Contains: "x"}, engine.Result{Stdout: "x"}, nil, true, false},
 		{"node sentinel removed", content.Assertion{Type: "file", Node: "r1", Path: "/f"}, engine.Result{Stdout: "clean"}, nil, true, false},
-		{"node non-zero code", content.Assertion{Type: "file", Node: "r1", Path: "/f", Contains: "x"}, engine.Result{Code: 1}, nil, false, false},
+		{"node non-zero code", content.Assertion{Type: "file", Node: "r1", Path: "/f", Contains: "x"}, engine.Result{Code: 1, Stdout: "x", Stderr: "cat: /f: No such file"}, nil, false, false},
 		{"node exec error", content.Assertion{Type: "file", Node: "r1", Path: "/f"}, engine.Result{}, errors.New("boom"), false, true},
 	}
 	for _, c := range cases {
@@ -86,5 +87,24 @@ func TestRunFileBranches(t *testing.T) {
 				t.Fatalf("err = %v, wantErr %v", got.Err, c.wantErr)
 			}
 		})
+	}
+}
+
+func TestFileNodeNonZeroExitIncludesStderr(t *testing.T) {
+	fe := &fakeExec{out: map[string]engine.Result{"cat '/f'": {Code: 1, Stderr: "cat: /f: No such file"}}}
+	ex := &content.Exercise{ID: "01", ChapterRef: &content.Chapter{TopologyName: "lab"}}
+	a := &content.Assertion{Type: "file", Node: "r1", Path: "/f", Contains: "x"}
+	res := runFile(context.Background(), fe, ex, a)
+	if res.Passed || !strings.Contains(res.Actual, "cat: /f: No such file") {
+		t.Fatalf("res = %+v", res)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	if got := shellQuote("/a b"); got != "'/a b'" {
+		t.Fatalf("shellQuote = %q", got)
+	}
+	if got := shellQuote("a'b"); got != `'a'\''b'` {
+		t.Fatalf("shellQuote = %q", got)
 	}
 }
