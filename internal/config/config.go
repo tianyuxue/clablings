@@ -3,11 +3,18 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	defaultPollInterval = 250 * time.Millisecond
+	defaultDebounce     = 300 * time.Millisecond
+	defaultBuildImage   = "gcc:13"
 )
 
 // Config 是用户配置，字段缺省时使用默认值。
@@ -47,27 +54,27 @@ func LoadFrom(path string) (*Config, error) {
 		return cfg, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("读取配置 %s: %w", path, err)
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析配置 %s: %w", path, err)
 	}
 	if cfg.Watch.PollInterval <= 0 {
-		cfg.Watch.PollInterval = 250 * time.Millisecond
+		cfg.Watch.PollInterval = defaultPollInterval
 	}
 	if cfg.Watch.Debounce <= 0 {
-		cfg.Watch.Debounce = 300 * time.Millisecond
+		cfg.Watch.Debounce = defaultDebounce
 	}
 	if cfg.Build.DefaultImage == "" {
-		cfg.Build.DefaultImage = "gcc:13"
+		cfg.Build.DefaultImage = defaultBuildImage
 	}
 	return cfg, nil
 }
 
 func defaults() *Config {
 	cfg := &Config{}
-	cfg.Watch.PollInterval = 250 * time.Millisecond
-	cfg.Watch.Debounce = 300 * time.Millisecond
-	cfg.Build.DefaultImage = "gcc:13"
+	cfg.Watch.PollInterval = defaultPollInterval
+	cfg.Watch.Debounce = defaultDebounce
+	cfg.Build.DefaultImage = defaultBuildImage
 	return cfg
 }
