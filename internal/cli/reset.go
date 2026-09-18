@@ -3,9 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/tianyuxue/clablings/internal/build"
+	"github.com/tianyuxue/clablings/internal/config"
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
 	"github.com/tianyuxue/clablings/internal/reset"
@@ -45,8 +48,13 @@ func runReset(ctx context.Context, root, id string, hard bool) error {
 	if err != nil {
 		return err
 	}
-	eng := engine.New("containerlab", "docker")
-	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng)})
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: reading config failed, using defaults: %v\n", err)
+	}
+	eng := engine.New(binOr(cfg.Containerlab.BinPath, "containerlab"), binOr(cfg.Docker.BinPath, "docker"))
+	builder := build.New(eng.Runner(), binOr(cfg.Docker.BinPath, "docker"), cfg.Build.DefaultImage)
+	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
 	if hard {
 		return res.Hard(ctx, ex)
 	}

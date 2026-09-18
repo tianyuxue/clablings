@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/tianyuxue/clablings/internal/assert"
+	"github.com/tianyuxue/clablings/internal/build"
 	"github.com/tianyuxue/clablings/internal/config"
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
@@ -60,13 +61,14 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
 	eng := engine.New(clabBin, dockerBin)
-	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng)})
+	builder := build.New(eng.Runner(), dockerBin, cfg.Build.DefaultImage)
+	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
 	sess := watch.New(watch.Options{
 		Library: lib,
 		State:   st,
 		Engine:  newLifecycleAdapter(eng),
 		Reset:   res,
-		Verify:  makeVerifier(eng),
+		Verify:  makeVerifier(eng, builder),
 		Report:  func(r []assert.Result) { report.Text(out, r) },
 	})
 	if initialID != "" {

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/tianyuxue/clablings/internal/assert"
+	"github.com/tianyuxue/clablings/internal/build"
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
 )
@@ -57,10 +58,11 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 	return nil
 }
 
-// makeVerifier combines assertions into a watch.Verifier. File assertions run
-// first (sentinel gate); if any fails, the rest are skipped. P5 inserts the
-// code-implement build step here.
-func makeVerifier(eng *engine.Engine) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+// makeVerifier combines assertions and the C build into a watch.Verifier. File
+// assertions run first (sentinel gate); if any fails, the rest are skipped.
+// For code-implement exercises the binary is rebuilt between the file gate and
+// the remaining assertions.
+func makeVerifier(eng *engine.Engine, builder *build.Builder) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 	return func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		var topo *engine.Topology
 		if ex.ChapterRef != nil {
@@ -76,6 +78,16 @@ func makeVerifier(eng *engine.Engine) func(ctx context.Context, ex *content.Exer
 		for _, r := range fileResults {
 			if !r.Passed {
 				return fileResults, nil
+			}
+		}
+		if ex.Type == content.TypeCodeImplement && builder != nil {
+			if err := builder.Rebuild(ctx, ex); err != nil {
+				fail := assert.Result{
+					Exercise: ex.FullID(), Name: "build and deploy", Type: "build",
+					Layer: "data-plane", Expected: "compile, deploy and start succeed",
+					Actual: "failure", Err: err, Passed: false,
+				}
+				return append(fileResults, fail), nil
 			}
 		}
 		rest := assert.RunFiltered(ctx, eng, topo, ex, func(a content.Assertion) bool {

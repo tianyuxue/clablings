@@ -156,7 +156,7 @@ func TestMakeVerifierFileGate(t *testing.T) {
 			{Name: "exec", Type: "exec", Node: "r1", Cmd: "true"},
 		}}
 	eng := engine.New("containerlab", "docker")
-	results, err := makeVerifier(eng)(context.Background(), ex)
+	results, err := makeVerifier(eng, nil)(context.Background(), ex)
 	if err != nil {
 		t.Fatalf("verifier: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestMakeVerifierTopologyError(t *testing.T) {
 	ex := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch,
 		Assertions: []content.Assertion{{Name: "x", Type: "file", Source: "missing"}}}
 	eng := engine.New("containerlab", "docker")
-	if _, err := makeVerifier(eng)(context.Background(), ex); err == nil {
+	if _, err := makeVerifier(eng, nil)(context.Background(), ex); err == nil {
 		t.Fatal("expected topology parse error")
 	}
 }

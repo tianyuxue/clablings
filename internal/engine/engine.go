@@ -23,6 +23,9 @@ func NewWithRunner(runner Runner, clabBin, dockerBin string) *Engine {
 	return &Engine{runner: runner, clabBin: clabBin, dockerBin: dockerBin}
 }
 
+// Runner returns the underlying command runner (reused by build, etc.).
+func (e *Engine) Runner() Runner { return e.runner }
+
 func (e *Engine) Deploy(ctx context.Context, topoPath string, timeout time.Duration) (Result, error) {
 	return e.runner.Run(ctx, e.clabBin, "deploy", "-t", topoPath, "--timeout", timeout.String())
 }
