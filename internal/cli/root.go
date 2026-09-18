@@ -2,8 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/tianyuxue/clablings/internal/content"
 )
 
 // Version 由构建时的 -ldflags 覆盖；默认 dev。
@@ -18,7 +21,22 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 	}
 	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newListCmd())
 	return cmd
+}
+
+func resolveRoot(flag string) (string, error) {
+	if flag != "" {
+		return content.FindRoot(flag)
+	}
+	if env := os.Getenv("CLABLINGS_ROOT"); env != "" {
+		return content.FindRoot(env)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return content.FindRoot(wd)
 }
 
 func newVersionCmd() *cobra.Command {
