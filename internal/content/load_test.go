@@ -3,6 +3,7 @@ package content
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -96,12 +97,16 @@ func TestLoadErrors(t *testing.T) {
 
 	tests := []struct {
 		name  string
+		want  string
 		setup func(t *testing.T, root string)
 	}{
 		{
 			name: "manifest 缺少 version",
+			want: "缺少 version",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), "chapters:\n  - chapters/c1\n")
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
 			},
 		},
 		{
@@ -112,13 +117,16 @@ func TestLoadErrors(t *testing.T) {
 		},
 		{
 			name: "chapter 缺少 id",
+			want: "缺少 id",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "title: t\ntopology: topology.clab.yml\n")
+				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
 			},
 		},
 		{
 			name: "chapter 缺少 topology",
+			want: "缺少 topology",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: t\n")
@@ -126,6 +134,7 @@ func TestLoadErrors(t *testing.T) {
 		},
 		{
 			name: "topology 文件不存在",
+			want: "topology 文件不存在",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
@@ -174,8 +183,12 @@ func TestLoadErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			tt.setup(t, root)
-			if _, err := Load(root); err == nil {
+			_, err := Load(root)
+			if err == nil {
 				t.Fatal("Load 期望返回错误，实际为 nil")
+			}
+			if tt.want != "" && !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, 期望包含 %q", err, tt.want)
 			}
 		})
 	}
