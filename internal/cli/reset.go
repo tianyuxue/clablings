@@ -32,7 +32,7 @@ func newResetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
-	cmd.Flags().BoolVar(&hard, "hard", false, "redeploy the chapter topology (fully reliable)")
+	cmd.Flags().BoolVar(&hard, "hard", false, "redeploy the chapter topology for a clean slate")
 	return cmd
 }
 
@@ -54,7 +54,7 @@ func runReset(ctx context.Context, root, id string, hard bool) error {
 }
 
 // resolveExercise resolves an exercise: an empty id uses the current exercise
-// from state; otherwise it is looked up by fully qualified or short ID.
+// from state; otherwise it is resolved by fully qualified or short ID.
 func resolveExercise(lib *content.Library, id string) (*content.Exercise, error) {
 	if id == "" {
 		st, err := state.Load(lib.Root)
@@ -66,20 +66,5 @@ func resolveExercise(lib *content.Library, id string) (*content.Exercise, error)
 		}
 		id = st.Current
 	}
-	if ex := lib.ByID[id]; ex != nil {
-		return ex, nil
-	}
-	var found *content.Exercise
-	for _, ex := range lib.Order {
-		if ex.ID == id {
-			if found != nil {
-				return nil, fmt.Errorf("exercise ID %q is not unique; use chapter-id/exercise-id", id)
-			}
-			found = ex
-		}
-	}
-	if found == nil {
-		return nil, fmt.Errorf("unknown exercise %q", id)
-	}
-	return found, nil
+	return lib.Resolve(id)
 }

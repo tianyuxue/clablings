@@ -64,30 +64,11 @@ func (s *Session) Start(ctx context.Context) error {
 // Run jumps to the given exercise and loads it. id may be a fully qualified ID
 // or an exercise-local ID that is unique across the library.
 func (s *Session) Run(ctx context.Context, id string) error {
-	ex, err := s.resolveExercise(id)
+	ex, err := s.opts.Library.Resolve(id)
 	if err != nil {
 		return err
 	}
 	return s.activate(ctx, ex)
-}
-
-func (s *Session) resolveExercise(id string) (*content.Exercise, error) {
-	if ex := s.opts.Library.ByID[id]; ex != nil {
-		return ex, nil
-	}
-	var found *content.Exercise
-	for _, ex := range s.opts.Library.Order {
-		if ex.ID == id {
-			if found != nil {
-				return nil, fmt.Errorf("exercise ID %q is not unique; use chapter-id/exercise-id", id)
-			}
-			found = ex
-		}
-	}
-	if found == nil {
-		return nil, fmt.Errorf("unknown exercise %q", id)
-	}
-	return found, nil
 }
 
 // VerifyNow runs one verification; on pass it advances to the next exercise.

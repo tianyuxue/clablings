@@ -1,8 +1,6 @@
 package cli
 
-import (
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 func newRunCmd() *cobra.Command {
 	var root string
