@@ -65,3 +65,59 @@ func TestWatcherSentinelGatesTrigger(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 }
+
+func TestWatcherScansAllFiles(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.c"), "// I AM NOT DONE\n")
+	write(t, filepath.Join(dir, "b.h"), "x\n")
+	ex := &content.Exercise{Dir: dir, Files: []content.FileMapping{{Source: "a.c"}, {Source: "b.h"}}}
+
+	w := NewWatcher(ex, 10*time.Millisecond)
+	if _, err := w.Scan(); err != nil {
+		t.Fatalf("first Scan: %v", err)
+	}
+	if w.ReadyToVerify() {
+		t.Fatal("a.c still has sentinel; must not be ready")
+	}
+	time.Sleep(15 * time.Millisecond)
+	write(t, filepath.Join(dir, "b.h"), "y\n")
+	changed, err := w.Scan()
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if !changed {
+		t.Fatal("later file change must be detected even while an earlier file keeps the sentinel")
+	}
+	if w.ReadyToVerify() {
+		t.Fatal("a.c still has sentinel; must not be ready")
+	}
+}
+
+func TestWatcherMissingFileErrorsWithoutLosingPriorChange(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.c"), "one\n")
+	write(t, filepath.Join(dir, "b.c"), "two\n")
+	ex := &content.Exercise{Dir: dir, Files: []content.FileMapping{{Source: "a.c"}, {Source: "b.c"}}}
+	w := NewWatcher(ex, 10*time.Millisecond)
+	if _, err := w.Scan(); err != nil {
+		t.Fatalf("first Scan: %v", err)
+	}
+
+	time.Sleep(15 * time.Millisecond)
+	write(t, filepath.Join(dir, "a.c"), "one-changed\n")
+	if err := os.Remove(filepath.Join(dir, "b.c")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Scan(); err == nil {
+		t.Fatal("expected error for missing watched file")
+	}
+	write(t, filepath.Join(dir, "b.c"), "two\n")
+	time.Sleep(15 * time.Millisecond)
+	changed, err := w.Scan()
+	if err != nil {
+		t.Fatalf("Scan after restore: %v", err)
+	}
+	if !changed {
+		t.Fatal("change to a.c must be re-detected after a failed scan")
+	}
+}
