@@ -42,7 +42,8 @@ func TestParseTopologyErrors(t *testing.T) {
 	}{
 		{"missing name", "topology:\n  nodes: {}\n", "missing top-level name"},
 		{"bad endpoint count", "name: l\ntopology:\n  links:\n    - endpoints: [\"r1:eth1\"]\n", "exactly 2 endpoints"},
-		{"invalid endpoint", "name: l\ntopology:\n  links:\n    - endpoints: [\"r1\", \"r2:eth1\"]\n", "invalid endpoint"},
+		{"invalid endpoint", "name: l\ntopology:\n  links:\n    - endpoints: [\"r1\", \"r2:eth1\"]\n", `link 0 endpoint "r1"`},
+		{"malformed yaml", "name: [unclosed\n", "parse topology"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -51,8 +52,14 @@ func TestParseTopologyErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := ParseTopology(path)
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want contains %q", err, tc.want)
+			}
+			if !strings.Contains(err.Error(), path) {
+				t.Fatalf("err = %v, want contains path %q", err, path)
 			}
 		})
 	}
@@ -61,14 +68,20 @@ func TestParseTopologyErrors(t *testing.T) {
 func TestParseTopologySortsNodes(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "t.clab.yml")
-	if err := os.WriteFile(path, []byte("name: l\ntopology:\n  nodes:\n    z: {kind: linux}\n    a: {kind: linux}\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("name: l\ntopology:\n  nodes:\n    z: {kind: linux}\n    m: {kind: linux}\n    a: {kind: linux}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	topo, err := ParseTopology(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(topo.Nodes) != 2 || topo.Nodes[0].Name != "a" || topo.Nodes[1].Name != "z" {
+	want := []string{"a", "m", "z"}
+	if len(topo.Nodes) != len(want) {
 		t.Fatalf("nodes = %+v", topo.Nodes)
+	}
+	for i, name := range want {
+		if topo.Nodes[i].Name != name {
+			t.Fatalf("nodes = %+v, want %v", topo.Nodes, want)
+		}
 	}
 }
