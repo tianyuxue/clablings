@@ -9,11 +9,12 @@ import (
 )
 
 type fakeExec struct {
-	execs    []string
-	out      map[string]engine.Result
-	iface    map[string][]engine.InspectInterface
-	execErr  error
-	ifaceErr error
+	execs      []string
+	out        map[string]engine.Result
+	iface      map[string][]engine.InspectInterface
+	execErr    error
+	ifaceErr   error
+	ifaceCalls int
 }
 
 func (f *fakeExec) Exec(_ context.Context, container, cmd string) (engine.Result, error) {
@@ -28,6 +29,7 @@ func (f *fakeExec) Exec(_ context.Context, container, cmd string) (engine.Result
 }
 
 func (f *fakeExec) InspectInterfaces(context.Context, string) (map[string][]engine.InspectInterface, error) {
+	f.ifaceCalls++
 	if f.ifaceErr != nil {
 		return nil, f.ifaceErr
 	}
