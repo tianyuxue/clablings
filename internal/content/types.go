@@ -86,8 +86,8 @@ type TextMatch struct {
 
 // Match 描述 exec 断言的期望。JSON 非空时按 JSONPath 取值后用内联 TextMatch 匹配。
 type Match struct {
-	ExitCode  *int       `yaml:"exit_code"`
-	JSON      string     `yaml:"json"`
+	ExitCode  *int   `yaml:"exit_code"`
+	JSON      string `yaml:"json"`
 	TextMatch `yaml:",inline"`
 	Stdout    *TextMatch `yaml:"stdout"`
 }

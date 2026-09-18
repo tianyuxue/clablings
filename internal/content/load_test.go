@@ -52,6 +52,9 @@ func TestLoadLibrary(t *testing.T) {
 	if ex.Assertions[0].Match == nil || ex.Assertions[0].Match.JSON != "$.neighbors.*.state" {
 		t.Fatalf("match = %+v", ex.Assertions[0].Match)
 	}
+	if ex.Assertions[0].Match.Equals != "Full" {
+		t.Fatalf("inline equals = %q", ex.Assertions[0].Match.Equals)
+	}
 	if ex.Dir != filepath.Join(root, "chapters", "01-ospf-mtu", "exercises", "01_mtu") {
 		t.Fatalf("exercise dir = %q", ex.Dir)
 	}
@@ -62,6 +65,12 @@ func TestLoadLibrary(t *testing.T) {
 	}
 	if code.Build.Image != "gcc:13" || code.Build.Output != "arp_responder" {
 		t.Fatalf("build = %+v", code.Build)
+	}
+	if len(code.Assertions) != 1 || code.Assertions[0].Match == nil || code.Assertions[0].Match.Stdout == nil {
+		t.Fatalf("assertions = %+v", code.Assertions)
+	}
+	if code.Assertions[0].Match.Stdout.Contains != "reply from" {
+		t.Fatalf("stdout contains = %q", code.Assertions[0].Match.Stdout.Contains)
 	}
 }
 
@@ -77,6 +86,98 @@ func TestLoadToleratesMissingExercisesDir(t *testing.T) {
 	}
 	if len(lib.Chapters) != 1 || len(lib.Chapters[0].Exercises) != 0 {
 		t.Fatalf("chapters = %+v", lib.Chapters)
+	}
+}
+
+func TestLoadErrors(t *testing.T) {
+	validManifest := "version: 1\nchapters:\n  - chapters/c1\n"
+	validChapter := "id: c1\ntitle: t\ntopology: topology.clab.yml\n"
+	validTopology := "name: lab-c1\ntopology:\n  nodes: {}\n"
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, root string)
+	}{
+		{
+			name: "manifest 缺少 version",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), "chapters:\n  - chapters/c1\n")
+			},
+		},
+		{
+			name: "manifest chapters 为空",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters: []\n")
+			},
+		},
+		{
+			name: "chapter 缺少 id",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "title: t\ntopology: topology.clab.yml\n")
+			},
+		},
+		{
+			name: "chapter 缺少 topology",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: t\n")
+			},
+		},
+		{
+			name: "topology 文件不存在",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
+			},
+		},
+		{
+			name: "topology 缺少顶层 name",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), "topology:\n  nodes: {}\n")
+			},
+		},
+		{
+			name: "exercise 非法 type",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: bogus\n")
+			},
+		},
+		{
+			name: "code-implement 缺少 build/run",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
+				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: code-implement\n")
+			},
+		},
+		{
+			name: "重复的题目 ID",
+			setup: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters:\n  - chapters/c1\n  - chapters/c2\n")
+				for _, dir := range []string{"c1", "c2"} {
+					writeFile(t, filepath.Join(root, "chapters", dir, "chapter.yaml"), "id: dup\ntitle: t\ntopology: topology.clab.yml\n")
+					writeFile(t, filepath.Join(root, "chapters", dir, "topology.clab.yml"), "name: lab-"+dir+"\ntopology:\n  nodes: {}\n")
+					writeFile(t, filepath.Join(root, "chapters", dir, "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: config-fix\n")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			tt.setup(t, root)
+			if _, err := Load(root); err == nil {
+				t.Fatal("Load 期望返回错误，实际为 nil")
+			}
+		})
 	}
 }
 

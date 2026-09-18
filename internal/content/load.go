@@ -1,6 +1,7 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func Load(root string) (*Library, error) {
 
 		exDir := filepath.Join(chDir, "exercises")
 		entries, err := os.ReadDir(exDir)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("章节 %s 的 exercises 目录: %w", ch.ID, err)
 		}
 		var names []string
