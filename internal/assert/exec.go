@@ -17,14 +17,14 @@ func runExec(ctx context.Context, exec Executor, ex *content.Exercise, a *conten
 	}
 
 	var expectedParts []string
+	var mismatches []string
 	passed := true
-	mismatch := ""
 
 	if a.Match != nil && a.Match.ExitCode != nil {
 		expectedParts = append(expectedParts, "exit code = "+strconv.Itoa(*a.Match.ExitCode))
 		if res.Code != *a.Match.ExitCode {
 			passed = false
-			mismatch = fmt.Sprintf("exit code = %d", res.Code)
+			mismatches = append(mismatches, fmt.Sprintf("exit code = %d", res.Code))
 		}
 	}
 
@@ -36,7 +36,7 @@ func runExec(ctx context.Context, exec Executor, ex *content.Exercise, a *conten
 		}
 		if !ok {
 			passed = false
-			mismatch = "JSONPath value = " + actual
+			mismatches = append(mismatches, "JSONPath value = "+actual)
 		}
 	} else {
 		tm := content.TextMatch{}
@@ -53,17 +53,23 @@ func runExec(ctx context.Context, exec Executor, ex *content.Exercise, a *conten
 			}
 			if !ok {
 				passed = false
-				mismatch = "stdout = " + firstLine(res.Stdout)
+				mismatches = append(mismatches, "stdout = "+firstLine(res.Stdout))
 			}
 		}
 	}
 
+	// No explicit condition: the command must succeed (exit code 0).
 	if len(expectedParts) == 0 {
 		expectedParts = append(expectedParts, "command succeeds")
+		if res.Code != 0 {
+			passed = false
+			mismatches = append(mismatches, fmt.Sprintf("exit code = %d", res.Code))
+		}
 	}
+
 	actual := fmt.Sprintf("exit code = %d", res.Code)
-	if mismatch != "" {
-		actual = mismatch
+	if len(mismatches) > 0 {
+		actual = strings.Join(mismatches, "; ")
 	} else if res.Stdout != "" {
 		actual += "; stdout = " + firstLine(res.Stdout)
 	}
