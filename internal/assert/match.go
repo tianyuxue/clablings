@@ -5,23 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/tianyuxue/clablings/internal/content"
 )
 
-func matchText(got string, tm content.TextMatch) bool {
+// matchText reports whether got satisfies tm. An invalid regex is a config
+// error and is surfaced to the caller rather than treated as a mismatch.
+func matchText(got string, tm content.TextMatch) (bool, error) {
 	switch {
 	case tm.Equals != "":
-		return strings.TrimSpace(got) == tm.Equals
+		return strings.TrimSpace(got) == strings.TrimSpace(tm.Equals), nil
 	case tm.Contains != "":
-		return strings.Contains(got, tm.Contains)
+		return strings.Contains(got, tm.Contains), nil
 	case tm.Regex != "":
 		re, err := regexp.Compile(tm.Regex)
-		return err == nil && re.MatchString(got)
+		if err != nil {
+			return false, fmt.Errorf("invalid regex %q: %w", tm.Regex, err)
+		}
+		return re.MatchString(got), nil
 	default:
-		return true
+		return true, nil
 	}
 }
 
@@ -99,7 +105,7 @@ func tokenizePath(s string) ([]pathToken, error) {
 				toks = append(toks, pathToken{wildcard: true})
 			} else {
 				n, err := strconv.Atoi(inner)
-				if err != nil {
+				if err != nil || n < 0 {
 					return nil, fmt.Errorf("invalid array index %q", inner)
 				}
 				toks = append(toks, pathToken{index: n, isIndex: true})
@@ -145,6 +151,8 @@ func applyToken(v any, tok pathToken) []any {
 	}
 }
 
+// matchJSON extracts values at path and requires every extracted value to match
+// tm. Extracted values are sorted so the reported actual string is deterministic.
 func matchJSON(stdout, path string, tm content.TextMatch) (bool, string, error) {
 	var data any
 	if err := json.Unmarshal([]byte(stdout), &data); err != nil {
@@ -165,9 +173,14 @@ func matchJSON(stdout, path string, tm content.TextMatch) (bool, string, error) 
 		}
 		strs = append(strs, s)
 	}
+	sort.Strings(strs)
 	actual := strings.Join(strs, ", ")
 	for _, s := range strs {
-		if !matchText(s, tm) {
+		ok, err := matchText(s, tm)
+		if err != nil {
+			return false, "", err
+		}
+		if !ok {
 			return false, actual, nil
 		}
 	}

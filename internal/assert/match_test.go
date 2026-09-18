@@ -21,10 +21,64 @@ func TestMatchText(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := matchText(c.got, c.tm); got != c.want {
+			got, err := matchText(c.got, c.tm)
+			if err != nil {
+				t.Fatalf("matchText error: %v", err)
+			}
+			if got != c.want {
 				t.Fatalf("matchText = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestMatchTextInvalidRegex(t *testing.T) {
+	if _, err := matchText("x", content.TextMatch{Regex: "("}); err == nil {
+		t.Fatal("expected regex compile error")
+	}
+}
+
+func TestTokenizePathErrors(t *testing.T) {
+	for _, c := range []string{"a", ".", ".a.", "[-1]", "[x]", "["} {
+		t.Run(c, func(t *testing.T) {
+			if _, err := tokenizePath(c); err == nil {
+				t.Fatalf("tokenizePath(%q) expected error", c)
+			}
+		})
+	}
+}
+
+func TestEvalJSONPathRequiresDollar(t *testing.T) {
+	if _, err := evalJSONPath(map[string]any{}, "neighbors"); err == nil {
+		t.Fatal("expected error without leading $")
+	}
+}
+
+func TestEvalJSONPathNegativeIndex(t *testing.T) {
+	if _, err := evalJSONPath(map[string]any{"list": []any{"a"}}, "$.list[-1]"); err == nil {
+		t.Fatal("expected error for negative index")
+	}
+}
+
+func TestMatchJSONNoMatchAndInvalidJSON(t *testing.T) {
+	if ok, actual, err := matchJSON(`{"a":{}}`, "$.a.*.x", content.TextMatch{}); err != nil || ok || actual != "(JSONPath matched nothing)" {
+		t.Fatalf("no-match: ok=%v actual=%q err=%v", ok, actual, err)
+	}
+	if _, _, err := matchJSON(`not json`, "$.a", content.TextMatch{}); err == nil {
+		t.Fatal("expected invalid JSON error")
+	}
+}
+
+func TestMatchJSONDistinctValuesDeterministic(t *testing.T) {
+	stdout := `{"n":{"b":{"s":"B"},"a":{"s":"A"},"c":{"s":"C"}}}`
+	for i := 0; i < 20; i++ {
+		_, actual, err := matchJSON(stdout, "$.n.*.s", content.TextMatch{Contains: "A"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actual != "A, B, C" {
+			t.Fatalf("actual = %q, want sorted %q", actual, "A, B, C")
+		}
 	}
 }
 
