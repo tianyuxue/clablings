@@ -1,4 +1,4 @@
-// Package config 读取 clablings 用户配置。
+// Package config reads the clablings user configuration.
 package config
 
 import (
@@ -17,7 +17,7 @@ const (
 	defaultBuildImage   = "gcc:13"
 )
 
-// Config 是用户配置，字段缺省时使用默认值。
+// Config is the user configuration; defaults are used for omitted fields.
 type Config struct {
 	Containerlab struct {
 		BinPath string `yaml:"bin_path"`
@@ -34,7 +34,7 @@ type Config struct {
 	} `yaml:"build"`
 }
 
-// DefaultPath 返回 ~/.config/clablings/config.yaml。
+// DefaultPath returns ~/.config/clablings/config.yaml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -43,10 +43,10 @@ func DefaultPath() string {
 	return filepath.Join(home, ".config", "clablings", "config.yaml")
 }
 
-// Load 从默认路径加载。
+// Load loads from the default path.
 func Load() (*Config, error) { return LoadFrom(DefaultPath()) }
 
-// LoadFrom 从指定路径加载；文件不存在返回默认配置。
+// LoadFrom loads from the given path; returns the default configuration if the file is missing.
 func LoadFrom(path string) (*Config, error) {
 	cfg := defaults()
 	data, err := os.ReadFile(path)
@@ -54,10 +54,10 @@ func LoadFrom(path string) (*Config, error) {
 		return cfg, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("读取配置 %s: %w", path, err)
+		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("解析配置 %s: %w", path, err)
+		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	if cfg.Watch.PollInterval <= 0 {
 		cfg.Watch.PollInterval = defaultPollInterval

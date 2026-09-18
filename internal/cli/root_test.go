@@ -15,6 +15,6 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	if !strings.Contains(out.String(), "clablings ") {
-		t.Fatalf("output = %q, 期望包含 %q", out.String(), "clablings ")
+		t.Fatalf("output = %q, want to contain %q", out.String(), "clablings ")
 	}
 }

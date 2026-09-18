@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 )
 
-// ManifestName 是题库根清单文件名。
+// ManifestName is the library root manifest file name.
 const ManifestName = "clablings.yaml"
 
-// FindRoot 从 start 目录向上查找含 clablings.yaml 的目录。
+// FindRoot searches upward from the start directory for a directory containing clablings.yaml.
 func FindRoot(start string) (string, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {
@@ -21,7 +21,7 @@ func FindRoot(start string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("未找到题库根：从 %s 向上未找到 %s", start, ManifestName)
+			return "", fmt.Errorf("library root not found: no %s found searching upward from %s", ManifestName, start)
 		}
 		dir = parent
 	}

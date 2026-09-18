@@ -50,13 +50,13 @@ func TestLoadCorruptQuarantines(t *testing.T) {
 	st, err := Load(dir)
 	var corrupt *CorruptError
 	if !errors.As(err, &corrupt) {
-		t.Fatalf("err = %v, 期望 CorruptError", err)
+		t.Fatalf("err = %v, want CorruptError", err)
 	}
 	if st.Version != 1 {
-		t.Fatalf("期望返回可用空状态，实际 %+v", st)
+		t.Fatalf("want usable empty state, got %+v", st)
 	}
 	if _, err := os.Stat(path + ".bak"); err != nil {
-		t.Fatalf("期望隔离文件存在: %v", err)
+		t.Fatalf("want quarantined file to exist: %v", err)
 	}
 }
 
@@ -82,14 +82,14 @@ func TestSaveMissingRootErrorsNoTempLitter(t *testing.T) {
 	root := filepath.Join(parent, "does-not-exist")
 	st := newState()
 	if err := st.Save(root); err == nil {
-		t.Fatal("期望 Save 报错")
+		t.Fatal("want Save to error")
 	}
 	matches, err := filepath.Glob(filepath.Join(parent, StateFileName+".tmp-*"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(matches) != 0 {
-		t.Fatalf("不应残留临时文件: %v", matches)
+		t.Fatalf("temp files should not remain: %v", matches)
 	}
 }
 
@@ -106,6 +106,6 @@ func TestLoadNormalizesVersionZero(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	if st.Version != 1 {
-		t.Fatalf("version = %d, 期望 1", st.Version)
+		t.Fatalf("version = %d, want 1", st.Version)
 	}
 }

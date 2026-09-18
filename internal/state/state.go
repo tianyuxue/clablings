@@ -1,4 +1,4 @@
-// Package state 持久化学员进度到 <root>/.clablings_state.json。
+// Package state persists learner progress to <root>/.clablings_state.json.
 package state
 
 import (
@@ -14,7 +14,7 @@ const StateFileName = ".clablings_state.json"
 
 const currentVersion = 1
 
-// Status 是题目进度。
+// Status is an exercise's progress.
 type Status string
 
 const (
@@ -23,21 +23,21 @@ const (
 	StatusPassed     Status = "passed"
 )
 
-// ExerciseState 是单题进度。
+// ExerciseState is the progress of a single exercise.
 type ExerciseState struct {
 	Status    Status    `json:"status"`
 	Attempts  int       `json:"attempts"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// State 是完整进度状态。
+// State is the complete progress state.
 type State struct {
 	Version   int                      `json:"version"`
 	Current   string                   `json:"current"`
 	Exercises map[string]ExerciseState `json:"exercises"`
 }
 
-// CorruptError 表示状态文件损坏；若已成功隔离则 RenameErr 为 nil。
+// CorruptError indicates the state file is corrupt; RenameErr is nil if quarantine succeeded.
 type CorruptError struct {
 	Path      string
 	Err       error
@@ -46,14 +46,15 @@ type CorruptError struct {
 
 func (e *CorruptError) Error() string {
 	if e.RenameErr != nil {
-		return fmt.Sprintf("状态文件损坏，隔离到 %s.bak 失败: %v（原始错误: %v）", e.Path, e.RenameErr, e.Err)
+		return fmt.Sprintf("state file corrupt, failed to quarantine to %s.bak: %v (original error: %v)", e.Path, e.RenameErr, e.Err)
 	}
-	return fmt.Sprintf("状态文件损坏，已隔离到 %s.bak: %v", e.Path, e.Err)
+	return fmt.Sprintf("state file corrupt, quarantined to %s.bak: %v", e.Path, e.Err)
 }
 
 func (e *CorruptError) Unwrap() error { return e.Err }
 
-// Load 读取状态；文件不存在返回空状态；损坏则隔离并将空状态与 CorruptError 一起返回。
+// Load reads the state; a missing file returns an empty state; if corrupt, it quarantines
+// the file and returns an empty state together with a CorruptError.
 func Load(root string) (*State, error) {
 	path := filepath.Join(root, StateFileName)
 	data, err := os.ReadFile(path)
@@ -78,7 +79,7 @@ func Load(root string) (*State, error) {
 	return &st, nil
 }
 
-// Save 原子写状态（临时文件 + fsync + rename）。
+// Save atomically writes the state (temp file + fsync + rename).
 func (s *State) Save(root string) error {
 	if s.Version == 0 {
 		s.Version = currentVersion
@@ -115,19 +116,19 @@ func (s *State) Save(root string) error {
 	}
 	dir, err := os.Open(root)
 	if err != nil {
-		return fmt.Errorf("打开父目录以 fsync: %w", err)
+		return fmt.Errorf("open parent dir for fsync: %w", err)
 	}
 	if err := dir.Sync(); err != nil {
 		dir.Close()
-		return fmt.Errorf("fsync 父目录: %w", err)
+		return fmt.Errorf("fsync parent dir: %w", err)
 	}
 	return dir.Close()
 }
 
-// SetCurrent 记录当前题目。
+// SetCurrent records the current exercise.
 func (s *State) SetCurrent(id string) { s.Current = id }
 
-// Get 返回题目进度；不存在时返回 todo 状态。
+// Get returns the exercise progress; if absent, it returns todo status.
 func (s *State) Get(id string) ExerciseState {
 	if es, ok := s.Exercises[id]; ok {
 		return es
@@ -135,7 +136,7 @@ func (s *State) Get(id string) ExerciseState {
 	return ExerciseState{Status: StatusTodo}
 }
 
-// Upsert 更新题目进度（attempts 为累计值）。
+// Upsert updates exercise progress (attempts is cumulative).
 func (s *State) Upsert(id string, status Status, attempts int) {
 	if s.Exercises == nil {
 		s.Exercises = map[string]ExerciseState{}

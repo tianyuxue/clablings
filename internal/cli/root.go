@@ -9,14 +9,14 @@ import (
 	"github.com/tianyuxue/clablings/internal/content"
 )
 
-// Version 由构建时的 -ldflags 覆盖；默认 dev。
+// Version is overridden at build time via -ldflags; defaults to dev.
 var Version = "dev"
 
-// NewRootCmd 构建 clablings 根命令。
+// NewRootCmd builds the clablings root command.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "clablings",
-		Short:         "互动式网络实战与协议通关平台",
+		Short:         "Interactive network practice and protocol mastery platform",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
@@ -42,7 +42,7 @@ func resolveRoot(flag string) (string, error) {
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "显示版本信息",
+		Short: "Show version information",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := fmt.Fprintf(cmd.OutOrStdout(), "clablings %s\n", Version)
 			return err

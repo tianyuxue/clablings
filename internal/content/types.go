@@ -1,14 +1,14 @@
-// Package content 解析 clablings 题库（清单 / 章节 / 题目）。
+// Package content parses the clablings library (manifest / chapters / exercises).
 package content
 
-// Manifest 对应题库根 clablings.yaml。
+// Manifest corresponds to the library root clablings.yaml.
 type Manifest struct {
 	Version  int      `yaml:"version"`
 	Name     string   `yaml:"name"`
 	Chapters []string `yaml:"chapters"`
 }
 
-// ExerciseType 是题型。
+// ExerciseType is the exercise type.
 type ExerciseType string
 
 const (
@@ -16,27 +16,27 @@ const (
 	TypeCodeImplement ExerciseType = "code-implement"
 )
 
-// FileMapping 把宿主可编辑文件映射到节点目标路径。
+// FileMapping maps an editable host file to a node target path.
 type FileMapping struct {
 	Source string `yaml:"source"`
 	Node   string `yaml:"node"`
 	Dest   string `yaml:"dest"`
 }
 
-// NodeCmd 是在指定节点内执行的命令。
+// NodeCmd is a command executed inside a specific node.
 type NodeCmd struct {
 	Node string `yaml:"node"`
 	Cmd  string `yaml:"cmd"`
 }
 
-// BuildSpec 描述 C 题的构建方式（本分册仅解析）。
+// BuildSpec describes how a C exercise is built (parsed only in this volume).
 type BuildSpec struct {
 	Image   string `yaml:"image"`
 	Command string `yaml:"command"`
 	Output  string `yaml:"output"`
 }
 
-// RunSpec 描述 C 题二进制的下发与进程管理（本分册仅解析）。
+// RunSpec describes delivery and process management of a C exercise binary (parsed only in this volume).
 type RunSpec struct {
 	Node  string `yaml:"node"`
 	Dest  string `yaml:"dest"`
@@ -44,12 +44,12 @@ type RunSpec struct {
 	Start string `yaml:"start"`
 }
 
-// Deploy 描述章节部署参数。
+// Deploy describes chapter deployment parameters.
 type Deploy struct {
 	Timeout string `yaml:"timeout"`
 }
 
-// Assertion 是单条断言声明。
+// Assertion is a single assertion declaration.
 type Assertion struct {
 	Name    string `yaml:"name"`
 	Type    string `yaml:"type"` // exec / file / interface / link
@@ -77,14 +77,15 @@ type Assertion struct {
 	PortB     string `yaml:"port_b"`
 }
 
-// TextMatch 描述对文本的匹配方式；三者互斥，按 Equals > Contains > Regex 优先。
+// TextMatch describes how text is matched; the three are mutually exclusive, preferring Equals > Contains > Regex.
 type TextMatch struct {
 	Equals   string `yaml:"equals"`
 	Contains string `yaml:"contains"`
 	Regex    string `yaml:"regex"`
 }
 
-// Match 描述 exec 断言的期望。JSON 非空时按 JSONPath 取值后用内联 TextMatch 匹配。
+// Match describes the expectation of an exec assertion. When JSON is non-empty, a JSONPath value is
+// extracted and matched with the inline TextMatch.
 type Match struct {
 	ExitCode  *int   `yaml:"exit_code"`
 	JSON      string `yaml:"json"`
@@ -92,7 +93,7 @@ type Match struct {
 	Stdout    *TextMatch `yaml:"stdout"`
 }
 
-// Chapter 对应 chapter.yaml 及其目录。
+// Chapter corresponds to chapter.yaml and its directory.
 type Chapter struct {
 	ID       string   `yaml:"id"`
 	Title    string   `yaml:"title"`
@@ -103,11 +104,11 @@ type Chapter struct {
 
 	Dir          string      `yaml:"-"`
 	TopologyPath string      `yaml:"-"`
-	TopologyName string      `yaml:"-"` // 拓扑顶层 name，用于推导容器长名
+	TopologyName string      `yaml:"-"` // topology top-level name, used to derive container long names
 	Exercises    []*Exercise `yaml:"-"`
 }
 
-// Exercise 对应 exercise.yaml 及其目录。
+// Exercise corresponds to exercise.yaml and its directory.
 type Exercise struct {
 	ID         string        `yaml:"id"`
 	Title      string        `yaml:"title"`
@@ -123,10 +124,10 @@ type Exercise struct {
 	Chapter string `yaml:"-"`
 }
 
-// FullID 返回全限定 ID：chapter-id/exercise-id。
+// FullID returns the fully qualified ID: chapter-id/exercise-id.
 func (e *Exercise) FullID() string { return e.Chapter + "/" + e.ID }
 
-// Library 是解析后的完整题库。
+// Library is the fully parsed library.
 type Library struct {
 	Root     string
 	Manifest Manifest

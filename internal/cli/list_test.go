@@ -32,13 +32,13 @@ func TestFormatLibraryText(t *testing.T) {
 	out := formatLibraryText(sampleLibrary(), st)
 
 	if !strings.Contains(out, "01-ospf-mtu OSPF MTU 不匹配") {
-		t.Fatalf("缺少章节行:\n%s", out)
+		t.Fatalf("missing chapter line:\n%s", out)
 	}
 	if !strings.Contains(out, "✓ 01_mtu 修复 OSPF 邻居卡在 ExStart") {
-		t.Fatalf("缺少通过标记:\n%s", out)
+		t.Fatalf("missing passed marker:\n%s", out)
 	}
 	if !strings.Contains(out, "· 01_arp 实现 ARP responder") {
-		t.Fatalf("缺少未开始标记:\n%s", out)
+		t.Fatalf("missing todo marker:\n%s", out)
 	}
 }
 
@@ -72,10 +72,10 @@ func TestListCommandText(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	if !strings.Contains(out.String(), "c1 章一") {
-		t.Fatalf("缺少章节行:\n%s", out.String())
+		t.Fatalf("missing chapter line:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "· e1 题一") {
-		t.Fatalf("缺少题目行:\n%s", out.String())
+		t.Fatalf("missing exercise line:\n%s", out.String())
 	}
 }
 
@@ -105,7 +105,7 @@ func TestListCommandJSON(t *testing.T) {
 		t.Fatalf("unmarshal: %v\n%s", err, out.String())
 	}
 	if got.Root != root {
-		t.Fatalf("root = %q, 期望 %q", got.Root, root)
+		t.Fatalf("root = %q, want %q", got.Root, root)
 	}
 	if len(got.Chapters) != 1 || got.Chapters[0].ID != "c1" {
 		t.Fatalf("chapters = %+v", got.Chapters)
@@ -133,10 +133,10 @@ func TestListCommandCorruptStateWarns(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	if !strings.Contains(out.String(), "e1 题一") {
-		t.Fatalf("stdout 缺少题目行:\n%s", out.String())
+		t.Fatalf("stdout missing exercise line:\n%s", out.String())
 	}
-	if !strings.Contains(errOut.String(), "警告:") {
-		t.Fatalf("stderr 缺少警告:\n%s", errOut.String())
+	if !strings.Contains(errOut.String(), "warning:") {
+		t.Fatalf("stderr missing warning:\n%s", errOut.String())
 	}
 }
 
@@ -150,7 +150,7 @@ func TestResolveRootPrecedence(t *testing.T) {
 		t.Fatalf("resolveRoot(\"\"): %v", err)
 	}
 	if got != root {
-		t.Fatalf("resolveRoot(\"\") = %q, 期望 %q", got, root)
+		t.Fatalf("resolveRoot(\"\") = %q, want %q", got, root)
 	}
 
 	got, err = resolveRoot(root)
@@ -158,6 +158,6 @@ func TestResolveRootPrecedence(t *testing.T) {
 		t.Fatalf("resolveRoot(root): %v", err)
 	}
 	if got != root {
-		t.Fatalf("resolveRoot(root) = %q, 期望 %q", got, root)
+		t.Fatalf("resolveRoot(root) = %q, want %q", got, root)
 	}
 }

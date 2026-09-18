@@ -9,7 +9,7 @@ import (
 
 func main() {
 	if err := cli.NewRootCmd().Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "clablings: 错误: %v\n", err)
+		fmt.Fprintf(os.Stderr, "clablings: error: %v\n", err)
 		os.Exit(1)
 	}
 }

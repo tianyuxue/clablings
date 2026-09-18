@@ -17,7 +17,7 @@ func newListCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "列出章节、题目与进度",
+		Short: "List chapters, exercises, and progress",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveRoot(root)
 			if err != nil {
@@ -33,7 +33,7 @@ func newListCmd() *cobra.Command {
 				if !errors.As(err, &corrupt) {
 					return err
 				}
-				fmt.Fprintf(cmd.ErrOrStderr(), "警告: %v\n", err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
 			if asJSON {
 				return writeJSON(cmd, lib, st)
@@ -42,8 +42,8 @@ func newListCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&root, "root", "", "题库根目录（默认向上查找 clablings.yaml）")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "以 JSON 输出")
+	cmd.Flags().StringVar(&root, "root", "", "library root directory (defaults to searching upward for clablings.yaml)")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON")
 	return cmd
 }
 

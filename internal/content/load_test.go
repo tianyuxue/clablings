@@ -17,10 +17,10 @@ func TestLoadLibrary(t *testing.T) {
 		t.Fatalf("version = %d", lib.Manifest.Version)
 	}
 	if len(lib.Chapters) != 2 {
-		t.Fatalf("chapters = %d, 期望 2", len(lib.Chapters))
+		t.Fatalf("chapters = %d, want 2", len(lib.Chapters))
 	}
 	if len(lib.Order) != 2 {
-		t.Fatalf("order = %d, 期望 2", len(lib.Order))
+		t.Fatalf("order = %d, want 2", len(lib.Order))
 	}
 
 	c0 := lib.Chapters[0]
@@ -39,7 +39,7 @@ func TestLoadLibrary(t *testing.T) {
 
 	ex := lib.ByID["01-ospf-mtu/01_mtu"]
 	if ex == nil {
-		t.Fatal("ByID 缺少 01-ospf-mtu/01_mtu")
+		t.Fatal("ByID missing 01-ospf-mtu/01_mtu")
 	}
 	if ex.Type != TypeConfigFix {
 		t.Fatalf("type = %q", ex.Type)
@@ -101,8 +101,8 @@ func TestLoadErrors(t *testing.T) {
 		setup func(t *testing.T, root string)
 	}{
 		{
-			name: "manifest 缺少 version",
-			want: "缺少 version",
+			name: "manifest missing version",
+			want: "missing version",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), "chapters:\n  - chapters/c1\n")
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
@@ -110,15 +110,15 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "manifest chapters 为空",
-			want: "chapters 为空",
+			name: "manifest chapters empty",
+			want: "chapters is empty",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters: []\n")
 			},
 		},
 		{
-			name: "chapter 缺少 id",
-			want: "缺少 id",
+			name: "chapter missing id",
+			want: "missing id",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "title: t\ntopology: topology.clab.yml\n")
@@ -126,23 +126,23 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "chapter 缺少 topology",
-			want: "缺少 topology",
+			name: "chapter missing topology",
+			want: "missing topology",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: t\n")
 			},
 		},
 		{
-			name: "topology 文件不存在",
-			want: "topology 文件不存在",
+			name: "topology file does not exist",
+			want: "topology file does not exist",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
 			},
 		},
 		{
-			name: "topology 缺少顶层 name",
+			name: "topology missing top-level name",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
@@ -150,8 +150,8 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "exercise 非法 type",
-			want: "非法 type",
+			name: "exercise invalid type",
+			want: "invalid type",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
@@ -160,7 +160,7 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "code-implement 缺少 build/run",
+			name: "code-implement missing build/run",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
@@ -169,7 +169,7 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "重复的题目 ID",
+			name: "duplicate exercise ID",
 			setup: func(t *testing.T, root string) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters:\n  - chapters/c1\n  - chapters/c2\n")
 				for _, dir := range []string{"c1", "c2"} {
@@ -187,10 +187,10 @@ func TestLoadErrors(t *testing.T) {
 			tt.setup(t, root)
 			_, err := Load(root)
 			if err == nil {
-				t.Fatal("Load 期望返回错误，实际为 nil")
+				t.Fatal("Load want error, got nil")
 			}
 			if tt.want != "" && !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("err = %v, 期望包含 %q", err, tt.want)
+				t.Fatalf("err = %v, want to contain %q", err, tt.want)
 			}
 		})
 	}

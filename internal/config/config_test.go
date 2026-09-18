@@ -14,13 +14,13 @@ func TestDefaultsWhenMissing(t *testing.T) {
 		t.Fatalf("LoadFrom: %v", err)
 	}
 	if cfg.Containerlab.BinPath != "" || cfg.Docker.BinPath != "" {
-		t.Fatalf("默认 bin_path 应为空: %+v", cfg)
+		t.Fatalf("default bin_path should be empty: %+v", cfg)
 	}
 	if cfg.Build.DefaultImage != "gcc:13" {
-		t.Fatalf("默认镜像 = %q", cfg.Build.DefaultImage)
+		t.Fatalf("default image = %q", cfg.Build.DefaultImage)
 	}
 	if cfg.Watch.PollInterval != 250*time.Millisecond || cfg.Watch.Debounce != 300*time.Millisecond {
-		t.Fatalf("默认监听参数 = %+v", cfg.Watch)
+		t.Fatalf("default watch params = %+v", cfg.Watch)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestLoadFromInvalidYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := LoadFrom(path); err == nil {
-		t.Fatal("无效 YAML 应返回错误")
+		t.Fatal("invalid YAML should return an error")
 	}
 }
 

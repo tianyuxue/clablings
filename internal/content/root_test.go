@@ -21,12 +21,12 @@ func TestFindRootWalksUp(t *testing.T) {
 		t.Fatalf("FindRoot: %v", err)
 	}
 	if got != root {
-		t.Fatalf("FindRoot = %q, 期望 %q", got, root)
+		t.Fatalf("FindRoot = %q, want %q", got, root)
 	}
 }
 
 func TestFindRootNotFound(t *testing.T) {
 	if _, err := FindRoot(t.TempDir()); err == nil {
-		t.Fatal("期望报错，实际为 nil")
+		t.Fatal("want error, got nil")
 	}
 }
