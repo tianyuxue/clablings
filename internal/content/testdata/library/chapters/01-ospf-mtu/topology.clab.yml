@@ -1,0 +1,6 @@
+name: clablings-ospf-mtu
+topology:
+  nodes:
+    r1:
+      kind: linux
+      image: frrouting/frr:10.0

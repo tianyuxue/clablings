@@ -1,0 +1,7 @@
+id: 01-ospf-mtu
+title: OSPF MTU 不匹配
+topology: topology.clab.yml
+deploy:
+  timeout: 120s
+setup:
+  - "docker exec r1 ip link set eth1 mtu 1400"

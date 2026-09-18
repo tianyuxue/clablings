@@ -1,0 +1,26 @@
+id: 01_arp
+title: 实现 ARP responder
+type: code-implement
+timeout: 30s
+files:
+  - source: arp_responder.c
+  - source: Makefile
+build:
+  image: gcc:13
+  command: make
+  output: arp_responder
+run:
+  node: host1
+  dest: /opt/clablings/arp_responder
+  stop: "pkill -f /opt/clablings/arp_responder || true"
+  start: "nohup /opt/clablings/arp_responder --iface eth1 >/var/log/arp.log 2>&1 &"
+assertions:
+  - name: 可解析 r1 的 MAC
+    type: exec
+    layer: data-plane
+    node: host1
+    cmd: "arping -c 2 -I eth1 10.0.1.1"
+    match:
+      exit_code: 0
+      stdout:
+        contains: "reply from"

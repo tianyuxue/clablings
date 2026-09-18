@@ -1,0 +1,6 @@
+name: clablings-arp
+topology:
+  nodes:
+    host1:
+      kind: linux
+      image: nicolaka/netshoot:v0.13
