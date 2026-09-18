@@ -20,12 +20,12 @@ func runFile(ctx context.Context, exec Executor, ex *content.Exercise, a *conten
 
 	if a.Node != "" && a.Path != "" {
 		source = a.Node + ":" + a.Path
-		res, err := exec.Exec(ctx, containerName(ex, a.Node), "cat "+a.Path)
+		res, err := exec.Exec(ctx, containerName(ex, a.Node), "cat "+shellQuote(a.Path))
 		if err != nil {
 			return Result{Passed: false, Expected: "readable " + source, Actual: "execution failed", Err: err}
 		}
 		if res.Code != 0 {
-			return Result{Passed: false, Expected: "readable " + source, Actual: "read failed (code=" + strconv.Itoa(res.Code) + ")"}
+			return Result{Passed: false, Expected: "readable " + source, Actual: "read failed (code=" + strconv.Itoa(res.Code) + ": " + strings.TrimSpace(res.Stderr) + ")"}
 		}
 		contentStr = res.Stdout
 	} else {
@@ -54,4 +54,9 @@ func runFile(ctx context.Context, exec Executor, ex *content.Exercise, a *conten
 		}
 		return Result{Passed: false, Expected: source + " has sentinel " + strconv.Quote(Sentinel) + " removed", Actual: fmt.Sprintf("still contains %q", Sentinel)}
 	}
+}
+
+// shellQuote single-quotes s for safe use in a POSIX shell command.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
