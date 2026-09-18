@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"time"
 )
 
 // Result is the outcome of one command execution. A non-zero exit code is
@@ -29,6 +30,9 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (Result,
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
+	// Safety net: if the direct child is killed but orphaned descendants keep
+	// the output pipes open, do not block Wait forever.
+	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
 	res := Result{Stdout: out.String(), Stderr: errb.String()}
 	if err != nil {
