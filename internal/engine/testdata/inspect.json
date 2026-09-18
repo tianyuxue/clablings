@@ -1,0 +1,17 @@
+{
+  "clablings-ospf-mtu": [
+    {
+      "lab_name": "clablings-ospf-mtu",
+      "name": "clab-clablings-ospf-mtu-r1",
+      "container_id": "3d495d344017",
+      "image": "frrouting/frr:10.0",
+      "kind": "linux",
+      "group": "",
+      "state": "running",
+      "status": "Up 25 seconds",
+      "ipv4_address": "172.20.20.3/24",
+      "ipv6_address": "3fff:172:20:20::3/64",
+      "owner": "jty"
+    }
+  ]
+}
