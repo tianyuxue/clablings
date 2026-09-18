@@ -69,10 +69,10 @@ func (b *Builder) Deploy(ctx context.Context, ex *content.Exercise, bin string) 
 	container := containerName(ex, ex.Run.Node)
 	res, err := b.runner.Run(ctx, b.dockerBin, "cp", bin, container+":"+ex.Run.Dest)
 	if err != nil {
-		return err
+		return fmt.Errorf("deploy %s: %w", ex.FullID(), err)
 	}
 	if res.Code != 0 {
-		return fmt.Errorf("binary deploy failed (code=%d): %s", res.Code, res.Stderr)
+		return fmt.Errorf("binary deploy failed (code=%d): %s%s", res.Code, res.Stdout, res.Stderr)
 	}
 	return nil
 }
@@ -88,12 +88,12 @@ func (b *Builder) Restart(ctx context.Context, ex *content.Exercise) error {
 	container := containerName(ex, ex.Run.Node)
 	if ex.Run.Stop != "" {
 		if _, err := b.runner.Run(ctx, b.dockerBin, "exec", container, "sh", "-lc", ex.Run.Stop); err != nil {
-			return err
+			return fmt.Errorf("restart %s: %w", ex.FullID(), err)
 		}
 	}
 	res, err := b.runner.Run(ctx, b.dockerBin, "exec", container, "sh", "-lc", ex.Run.Start)
 	if err != nil {
-		return err
+		return fmt.Errorf("restart %s: %w", ex.FullID(), err)
 	}
 	if res.Code != 0 {
 		return fmt.Errorf("process start failed (code=%d): %s", res.Code, res.Stderr)
@@ -114,10 +114,7 @@ func (b *Builder) Rebuild(ctx context.Context, ex *content.Exercise) error {
 }
 
 func containerName(ex *content.Exercise, node string) string {
-	if ex.ChapterRef != nil && ex.ChapterRef.TopologyName != "" {
-		return "clab-" + ex.ChapterRef.TopologyName + "-" + node
-	}
-	return node
+	return engine.ContainerNameFor(ex, node)
 }
 
 // exerciseTimeout returns the exercise's declared timeout, default 30s.

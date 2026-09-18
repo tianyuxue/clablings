@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -84,5 +85,69 @@ func TestRebuildBuildsDeploysRestarts(t *testing.T) {
 	}
 	if fr.calls[0][1] != "run" || fr.calls[1][1] != "cp" || fr.calls[2][1] != "exec" {
 		t.Fatalf("wrong call order: %v", fr.calls)
+	}
+}
+
+func TestDeployErrors(t *testing.T) {
+	if err := New(&fakeRunner{}, "docker", "gcc:13").Deploy(context.Background(), &content.Exercise{ID: "e1", Chapter: "c1"}, "/bin"); err == nil {
+		t.Fatal("expected error for missing run spec")
+	}
+	fr := &fakeRunner{results: []engine.Result{{Code: 1, Stderr: "cp boom"}}}
+	if err := New(fr, "docker", "gcc:13").Deploy(context.Background(), codeExercise(), "/bin"); err == nil {
+		t.Fatal("expected deploy failure")
+	}
+	fr2 := &fakeRunner{errs: []error{errors.New("start failed")}}
+	if err := New(fr2, "docker", "gcc:13").Deploy(context.Background(), codeExercise(), "/bin"); err == nil {
+		t.Fatal("expected runner error")
+	}
+}
+
+func TestRestartToleratesStopFailure(t *testing.T) {
+	fr := &fakeRunner{results: []engine.Result{{Code: 1}, {Code: 0}}}
+	if err := New(fr, "docker", "gcc:13").Restart(context.Background(), codeExercise()); err != nil {
+		t.Fatalf("stop failure must be tolerated: %v", err)
+	}
+	if len(fr.calls) != 2 {
+		t.Fatalf("calls = %d, want 2", len(fr.calls))
+	}
+}
+
+func TestRestartErrors(t *testing.T) {
+	if err := New(&fakeRunner{}, "docker", "gcc:13").Restart(context.Background(), &content.Exercise{ID: "e1", Chapter: "c1"}); err == nil {
+		t.Fatal("expected error for missing run spec")
+	}
+	fr := &fakeRunner{errs: []error{nil, errors.New("start failed")}}
+	if err := New(fr, "docker", "gcc:13").Restart(context.Background(), codeExercise()); err == nil {
+		t.Fatal("expected runner error")
+	}
+}
+
+func TestRestartWithoutStop(t *testing.T) {
+	ex := codeExercise()
+	ex.Run.Stop = ""
+	fr := &fakeRunner{}
+	if err := New(fr, "docker", "gcc:13").Restart(context.Background(), ex); err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+	if len(fr.calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(fr.calls))
+	}
+}
+
+func TestRebuildPropagatesBuildFailure(t *testing.T) {
+	fr := &fakeRunner{results: []engine.Result{{Code: 1, Stderr: "compile boom"}}}
+	ex := codeExercise()
+	ex.Dir = t.TempDir()
+	if err := New(fr, "docker", "gcc:13").Rebuild(context.Background(), ex); err == nil {
+		t.Fatal("expected build failure")
+	}
+}
+
+func TestContainerNameFallback(t *testing.T) {
+	if got := containerName(&content.Exercise{}, "r1"); got != "r1" {
+		t.Fatalf("containerName = %q, want r1", got)
+	}
+	if got := containerName(&content.Exercise{ChapterRef: &content.Chapter{TopologyName: "lab"}}, "r1"); got != "clab-lab-r1" {
+		t.Fatalf("containerName = %q", got)
 	}
 }

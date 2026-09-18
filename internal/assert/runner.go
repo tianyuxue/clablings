@@ -32,10 +32,7 @@ type Result struct {
 
 // containerName derives the container long name from the chapter topology name.
 func containerName(ex *content.Exercise, node string) string {
-	if ex.ChapterRef != nil && ex.ChapterRef.TopologyName != "" {
-		return "clab-" + ex.ChapterRef.TopologyName + "-" + node
-	}
-	return node
+	return engine.ContainerNameFor(ex, node)
 }
 
 func labName(ex *content.Exercise) string {

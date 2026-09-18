@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tianyuxue/clablings/internal/content"
+	"github.com/tianyuxue/clablings/internal/engine"
 )
 
 // Engine is the minimal engine capability needed for fast-path reset.
@@ -145,8 +146,5 @@ func exerciseTimeout(ex *content.Exercise) time.Duration {
 
 // contentContainer derives the container long name from the chapter topology name; falls back to the node name.
 func contentContainer(ex *content.Exercise, node string) string {
-	if ex.ChapterRef != nil && ex.ChapterRef.TopologyName != "" {
-		return "clab-" + ex.ChapterRef.TopologyName + "-" + node
-	}
-	return node
+	return engine.ContainerNameFor(ex, node)
 }
