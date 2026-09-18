@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/tianyuxue/clablings/internal/assert"
-	"github.com/tianyuxue/clablings/internal/build"
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
+	"github.com/tianyuxue/clablings/internal/reset"
 )
 
 // binOr returns the configured value, falling back to the default command name.
@@ -62,7 +62,7 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 // assertions run first (sentinel gate); if any fails, the rest are skipped.
 // For code-implement exercises the binary is rebuilt between the file gate and
 // the remaining assertions.
-func makeVerifier(eng *engine.Engine, builder *build.Builder) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+func makeVerifier(eng *engine.Engine, builder reset.Rebuilder) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 	return func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		var topo *engine.Topology
 		if ex.ChapterRef != nil {
@@ -80,10 +80,18 @@ func makeVerifier(eng *engine.Engine, builder *build.Builder) func(ctx context.C
 				return fileResults, nil
 			}
 		}
-		if ex.Type == content.TypeCodeImplement && builder != nil {
+		if ex.Type == content.TypeCodeImplement {
+			if builder == nil {
+				fail := assert.Result{
+					Exercise: ex.FullID(), Name: "build, deploy and start", Type: "build",
+					Layer: "data-plane", Expected: "compile, deploy and start succeed",
+					Actual: "no rebuilder configured", Passed: false,
+				}
+				return append(fileResults, fail), nil
+			}
 			if err := builder.Rebuild(ctx, ex); err != nil {
 				fail := assert.Result{
-					Exercise: ex.FullID(), Name: "build and deploy", Type: "build",
+					Exercise: ex.FullID(), Name: "build, deploy and start", Type: "build",
 					Layer: "data-plane", Expected: "compile, deploy and start succeed",
 					Actual: "failure", Err: err, Passed: false,
 				}

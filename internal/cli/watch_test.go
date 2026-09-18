@@ -165,6 +165,60 @@ func TestMakeVerifierFileGate(t *testing.T) {
 	}
 }
 
+type fakeRebuilder struct {
+	calls int
+	err   error
+}
+
+func (f *fakeRebuilder) Rebuild(context.Context, *content.Exercise) error {
+	f.calls++
+	return f.err
+}
+
+type stubRunner struct{ calls [][]string }
+
+func (s *stubRunner) Run(_ context.Context, name string, args ...string) (engine.Result, error) {
+	s.calls = append(s.calls, append([]string{name}, args...))
+	return engine.Result{}, nil
+}
+
+func TestMakeVerifierBuildStep(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Type: content.TypeCodeImplement,
+		Assertions: []content.Assertion{{Name: "exec", Type: "exec", Node: "r1", Cmd: "true"}}}
+	eng := engine.NewWithRunner(&stubRunner{}, "containerlab", "docker")
+
+	// success: rebuild runs, then the exec assertion passes
+	rb := &fakeRebuilder{}
+	results, err := makeVerifier(eng, rb)(context.Background(), ex)
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	if rb.calls != 1 || len(results) != 1 || !results[0].Passed {
+		t.Fatalf("calls=%d results=%+v", rb.calls, results)
+	}
+
+	// build failure: a failed build result is returned and the rest is skipped
+	rb = &fakeRebuilder{err: errors.New("compile boom")}
+	results, err = makeVerifier(eng, rb)(context.Background(), ex)
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	if len(results) != 1 || results[0].Passed || results[0].Type != "build" {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
+func TestMakeVerifierBuildRequiresRebuilder(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Type: content.TypeCodeImplement}
+	results, err := makeVerifier(engine.New("containerlab", "docker"), nil)(context.Background(), ex)
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	if len(results) != 1 || results[0].Passed || results[0].Actual != "no rebuilder configured" {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
 func TestMakeVerifierTopologyError(t *testing.T) {
 	ch := &content.Chapter{ID: "c1", TopologyPath: filepath.Join(t.TempDir(), "missing.clab.yml")}
 	ex := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch,
