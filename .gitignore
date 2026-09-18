@@ -2,3 +2,7 @@
 /clablings
 *.test
 /dist/
+
+# clablings progress state
+.clablings_state.json
+.clablings_state.json.bak
