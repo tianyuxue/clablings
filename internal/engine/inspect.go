@@ -1,6 +1,10 @@
 package engine
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
 
 // InspectNode is one node from inspect output.
 type InspectNode struct {
@@ -18,18 +22,17 @@ type InspectNode struct {
 // ParseInspect parses `containerlab inspect --format json`, grouped by lab name.
 func ParseInspect(data []byte) (map[string][]InspectNode, error) {
 	var raw map[string][]struct {
-		LabName string `json:"lab_name"`
-		Name    string `json:"name"`
-		Kind    string `json:"kind"`
-		Image   string `json:"image"`
-		Group   string `json:"group"`
-		State   string `json:"state"`
-		Status  string `json:"status"`
-		IPv4    string `json:"ipv4_address"`
-		IPv6    string `json:"ipv6_address"`
+		Name   string `json:"name"`
+		Kind   string `json:"kind"`
+		Image  string `json:"image"`
+		Group  string `json:"group"`
+		State  string `json:"state"`
+		Status string `json:"status"`
+		IPv4   string `json:"ipv4_address"`
+		IPv6   string `json:"ipv6_address"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse inspect json: %w", err)
 	}
 	out := map[string][]InspectNode{}
 	for lab, nodes := range raw {
@@ -72,7 +75,7 @@ func ParseInspectInterfaces(data []byte) (map[string][]InspectInterface, error) 
 		} `json:"interfaces"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse inspect interfaces json: %w", err)
 	}
 	out := map[string][]InspectInterface{}
 	for _, node := range raw {
@@ -86,9 +89,5 @@ func ParseInspectInterfaces(data []byte) (map[string][]InspectInterface, error) 
 }
 
 func trimContainerPrefix(container, lab string) string {
-	prefix := "clab-" + lab + "-"
-	if len(container) > len(prefix) && container[:len(prefix)] == prefix {
-		return container[len(prefix):]
-	}
-	return container
+	return strings.TrimPrefix(container, "clab-"+lab+"-")
 }

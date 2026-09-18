@@ -38,3 +38,9 @@ func TestParseInspectInterfaces(t *testing.T) {
 		t.Fatalf("ifaces = %+v", list)
 	}
 }
+
+func TestTrimContainerPrefixNoMatch(t *testing.T) {
+	if got := trimContainerPrefix("clab-other-r1", "lab"); got != "clab-other-r1" {
+		t.Fatalf("trimContainerPrefix = %q", got)
+	}
+}

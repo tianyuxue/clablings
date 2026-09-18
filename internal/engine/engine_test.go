@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,5 +73,33 @@ func TestEngineExecAndCopyCommands(t *testing.T) {
 	wantCopy := []string{"docker", "cp", "/tmp/a.conf", "clab-x-r1:/etc/frr/frr.conf"}
 	if !reflect.DeepEqual(fr.calls[1], wantCopy) {
 		t.Fatalf("copy = %v, want %v", fr.calls[1], wantCopy)
+	}
+}
+
+func TestEngineCommandsFailOnNonZeroCode(t *testing.T) {
+	fr := &fakeRunner{results: []Result{
+		{Code: 1, Stderr: "inspect boom"},
+		{Code: 1, Stderr: "ifaces boom"},
+		{Code: 1, Stderr: "cp boom"},
+	}}
+	e := NewWithRunner(fr, "containerlab", "docker")
+
+	if _, err := e.Inspect(context.Background(), "/t.yml"); err == nil || !strings.Contains(err.Error(), "inspect boom") {
+		t.Fatalf("Inspect err = %v, want contains %q", err, "inspect boom")
+	}
+	if _, err := e.InspectInterfaces(context.Background(), "lab"); err == nil || !strings.Contains(err.Error(), "ifaces boom") {
+		t.Fatalf("InspectInterfaces err = %v, want contains %q", err, "ifaces boom")
+	}
+	if err := e.CopyToContainer(context.Background(), "/a", "c", "/b"); err == nil || !strings.Contains(err.Error(), "cp boom") {
+		t.Fatalf("CopyToContainer err = %v, want contains %q", err, "cp boom")
+	}
+}
+
+func TestEnginePropagatesRunnerError(t *testing.T) {
+	sentinel := errors.New("start failed")
+	fr := &fakeRunner{results: []Result{{}}, errs: []error{sentinel}}
+	e := NewWithRunner(fr, "containerlab", "docker")
+	if _, err := e.Inspect(context.Background(), "/t.yml"); !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want sentinel", err)
 	}
 }
