@@ -13,6 +13,9 @@ type Executor interface {
 	InspectInterfaces(ctx context.Context, labName string) (map[string][]engine.InspectInterface, error)
 }
 
+// Compile-time check that the real engine satisfies Executor.
+var _ Executor = (*engine.Engine)(nil)
+
 // Result is the structured outcome of one assertion.
 type Result struct {
 	Exercise  string
