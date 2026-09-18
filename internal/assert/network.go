@@ -32,9 +32,6 @@ func runLink(ex *content.Exercise, a *content.Assertion, topo *engine.Topology, 
 		actualState = "up"
 	}
 	passed := actualState == a.State
-	if a.State == "unknown" {
-		passed = actualState == "unknown"
-	}
 	return Result{Passed: passed, Expected: linkDesc(a, a.State), Actual: linkDesc(a, actualState)}
 }
 
