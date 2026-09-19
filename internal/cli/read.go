@@ -90,11 +90,7 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 		return err
 	}
 	if len(readings) > 0 {
-		if isTTY() {
-			fmt.Fprintln(w, "\x1b[1mReading:\x1b[0m")
-		} else {
-			fmt.Fprintln(w, "Reading:")
-		}
+		fmt.Fprintln(w, "Reading:")
 		for _, r := range readings {
 			kind := ""
 			if r.Kind != "" {
@@ -108,30 +104,19 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 			if r.RFC > 0 {
 				label = fmt.Sprintf("RFC %d%s %s", r.RFC, section, r.Title)
 			}
-			fmt.Fprintf(w, "  - %s%s\n", hyperlink(label, r.URL), kind)
+			fmt.Fprintf(w, "- %s%s\n", label, kind)
 			if r.URL != "" {
-				fmt.Fprintf(w, "      %s\n", r.URL)
+				fmt.Fprintf(w, "  %s\n", r.URL)
 			}
 			if r.Intro != "" {
-				fmt.Fprintf(w, "      Intro: %s\n", r.Intro)
+				fmt.Fprintf(w, "  Intro: %s\n", r.Intro)
 			}
 			if r.Question != "" {
-				fmt.Fprintf(w, "      Question: %s\n", r.Question)
+				fmt.Fprintf(w, "  Question: %s\n", r.Question)
 			}
 		}
 	}
 	return nil
-}
-
-func isTTY() bool { return term.IsTerminal(int(os.Stdout.Fd())) }
-
-// hyperlink renders text as an underlined, clickable OSC 8 hyperlink on a
-// terminal; on a non-terminal it returns the plain text.
-func hyperlink(text, url string) string {
-	if url == "" || !isTTY() {
-		return text
-	}
-	return "\x1b[4;36m\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\\x1b[0m"
 }
 
 // stripLeadingHeading drops a leading `# ...` title line from a concept body,
