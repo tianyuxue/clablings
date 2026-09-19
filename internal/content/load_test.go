@@ -73,6 +73,9 @@ func TestLoadLibrary(t *testing.T) {
 	if code.Assertions[0].Match.Stdout.Contains != "reply from" {
 		t.Fatalf("stdout contains = %q", code.Assertions[0].Match.Stdout.Contains)
 	}
+	if c0.LabName == "" || !strings.HasPrefix(c0.LabName, "library-") {
+		t.Fatalf("lab name = %q, want instance-derived prefix", c0.LabName)
+	}
 }
 
 func TestLoadToleratesMissingExercisesDir(t *testing.T) {

@@ -105,6 +105,7 @@ type Chapter struct {
 	Dir          string      `yaml:"-"`
 	TopologyPath string      `yaml:"-"`
 	TopologyName string      `yaml:"-"` // topology top-level name, used to derive container long names
+	LabName      string      `yaml:"-"` // instance-derived containerlab lab name
 	Exercises    []*Exercise `yaml:"-"`
 }
 
@@ -116,6 +117,7 @@ type Exercise struct {
 	Timeout    string        `yaml:"timeout"`
 	Files      []FileMapping `yaml:"files"`
 	Reload     []NodeCmd     `yaml:"reload"`
+	Hints      []string      `yaml:"hints"`
 	Build      *BuildSpec    `yaml:"build"`
 	Run        *RunSpec      `yaml:"run"`
 	Assertions []Assertion   `yaml:"assertions"`

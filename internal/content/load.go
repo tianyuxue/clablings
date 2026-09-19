@@ -23,12 +23,15 @@ func Load(root string) (*Library, error) {
 		ByID:     map[string]*Exercise{},
 	}
 
+	instance := InstanceID(root)
+
 	for _, rel := range manifest.Chapters {
 		chDir := filepath.Join(root, rel)
 		ch, err := loadChapter(chDir)
 		if err != nil {
 			return nil, fmt.Errorf("chapter %s: %w", rel, err)
 		}
+		ch.LabName = LabName(root, instance, ch.TopologyName)
 		lib.Chapters = append(lib.Chapters, ch)
 
 		exDir := filepath.Join(chDir, "exercises")
