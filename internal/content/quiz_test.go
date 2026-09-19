@@ -51,12 +51,37 @@ func TestQuizValidationErrors(t *testing.T) {
 		{
 			name: "no correct option",
 			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n      - text: b\n",
-			want: "correct option",
+			want: "needs a correct option",
 		},
 		{
 			name: "single choice with two correct",
 			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: false\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n",
 			want: "exactly one correct",
+		},
+		{
+			name: "questions on non-quiz",
+			body: "id: q1\ntype: config-fix\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
+			want: "only allowed for quiz",
+		},
+		{
+			name: "quiz with assertions",
+			body: "id: q1\ntype: quiz\ntitle: t\nassertions:\n  - name: a\n    type: exec\n    node: n1\n    cmd: \"true\"\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
+			want: "cannot use build/run/files/reload/assertions",
+		},
+		{
+			name: "empty prompt",
+			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - options:\n      - text: a\n        correct: true\n      - text: b\n",
+			want: "missing a prompt",
+		},
+		{
+			name: "empty option text",
+			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: \"\"\n",
+			want: "missing text",
+		},
+		{
+			name: "multiple with one correct",
+			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
+			want: "at least two correct",
 		},
 	}
 	for _, tc := range cases {
@@ -66,5 +91,21 @@ func TestQuizValidationErrors(t *testing.T) {
 				t.Fatalf("err = %v, want contains %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestLoadQuizMultipleChoice(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\n",
+		"chapters/c1/exercises/q1/exercise.yaml": "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n      - text: c\n        correct: false\n",
+	})
+	lib, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	q := lib.Chapters[0].Exercises[0].Questions[0]
+	if !q.Multiple || len(q.Options) != 3 || !q.Options[0].Correct || !q.Options[1].Correct {
+		t.Fatalf("question = %+v", q)
 	}
 }

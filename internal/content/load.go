@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -178,10 +179,16 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 	default:
 		return nil, fmt.Errorf("exercise %s: invalid type %q", ex.ID, ex.Type)
 	}
+	if ex.Type != TypeQuiz && len(ex.Questions) > 0 {
+		return nil, fmt.Errorf("exercise %s: questions are only allowed for quiz exercises", ex.ID)
+	}
 	if ex.Type == TypeCodeImplement && (ex.Build == nil || ex.Run == nil) {
 		return nil, fmt.Errorf("exercise %s: code-implement requires build and run", ex.ID)
 	}
 	if ex.Type == TypeQuiz {
+		if ex.Build != nil || ex.Run != nil || len(ex.Files) > 0 || len(ex.Reload) > 0 || len(ex.Assertions) > 0 {
+			return nil, fmt.Errorf("exercise %s: quiz exercises cannot use build/run/files/reload/assertions", ex.ID)
+		}
 		if len(ex.Questions) == 0 {
 			return nil, fmt.Errorf("exercise %s: quiz requires at least one question", ex.ID)
 		}
@@ -190,9 +197,15 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 			if len(q.Options) < 2 {
 				return nil, fmt.Errorf("exercise %s: question %d needs at least two options", ex.ID, qi+1)
 			}
+			if strings.TrimSpace(q.Prompt) == "" {
+				return nil, fmt.Errorf("exercise %s: question %d is missing a prompt", ex.ID, qi+1)
+			}
 			correct := 0
-			for _, o := range q.Options {
-				if o.Correct {
+			for oi := range q.Options {
+				if strings.TrimSpace(q.Options[oi].Text) == "" {
+					return nil, fmt.Errorf("exercise %s: question %d option %d is missing text", ex.ID, qi+1, oi+1)
+				}
+				if q.Options[oi].Correct {
 					correct++
 				}
 			}
@@ -201,6 +214,9 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 			}
 			if !q.Multiple && correct != 1 {
 				return nil, fmt.Errorf("exercise %s: question %d single-choice question must have exactly one correct option", ex.ID, qi+1)
+			}
+			if q.Multiple && correct < 2 {
+				return nil, fmt.Errorf("exercise %s: question %d multiple-choice needs at least two correct options", ex.ID, qi+1)
 			}
 		}
 	}
