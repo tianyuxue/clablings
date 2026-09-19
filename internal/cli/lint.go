@@ -80,12 +80,14 @@ func lintLibrary(root string) ([]string, error) {
 					case "exec", "interface":
 						checkNode(ex.FullID(), i+1, "assertion", a.Node)
 					case "link":
-						checkNode(ex.FullID(), i+1, "assertion", a.A)
-						checkNode(ex.FullID(), i+1, "assertion", a.B)
+						checkNode(ex.FullID(), i+1, "link endpoint a", a.A)
+						checkNode(ex.FullID(), i+1, "link endpoint b", a.B)
 					case "file":
 						if a.Node != "" && !nodes[a.Node] {
 							problems = append(problems, fmt.Sprintf("%s: assertion %d references unknown node %q", ex.FullID(), i+1, a.Node))
 						}
+					default:
+						problems = append(problems, fmt.Sprintf("%s: assertion %d has unknown type %q", ex.FullID(), i+1, a.Type))
 					}
 				}
 				for _, f := range ex.Files {

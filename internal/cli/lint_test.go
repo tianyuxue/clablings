@@ -176,3 +176,41 @@ func TestLintUnknownFileNode(t *testing.T) {
 		t.Fatalf("out = %q", out.String())
 	}
 }
+
+func TestLintUnknownAssertionType(t *testing.T) {
+	root := writeLintTree(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: {en: t, zh: t}\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes:\n    n1:\n      kind: linux\n      image: alpine:3.20\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntitle: {en: t, zh: t}\ntype: config-fix\nassertions:\n  - name: {en: a, zh: a}\n    type: bogus\n    node: n1\n",
+	})
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected lint failure for unknown assertion type")
+	}
+	if !strings.Contains(out.String(), "unknown type") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
+
+func TestLintWaitZeroAllowed(t *testing.T) {
+	root := writeLintTree(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: {en: t, zh: t}\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes:\n    n1:\n      kind: linux\n      image: alpine:3.20\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntitle: {en: t, zh: t}\ntype: config-fix\nassertions:\n  - name: {en: a, zh: a}\n    type: exec\n    node: n1\n    cmd: \"true\"\n    wait: \"0s\"\n",
+	})
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("lint: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "ok:") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
