@@ -178,6 +178,9 @@ func TestRunExerciseWaitTimesOut(t *testing.T) {
 	if len(results) != 1 || results[0].Passed {
 		t.Fatalf("results = %+v", results)
 	}
+	if fe.calls != 1 {
+		t.Fatalf("expected a single attempt within the wait window, calls=%d", fe.calls)
+	}
 }
 
 func TestRunExerciseNoWaitRunsOnce(t *testing.T) {
@@ -188,5 +191,36 @@ func TestRunExerciseNoWaitRunsOnce(t *testing.T) {
 	results := RunExercise(context.Background(), fe, nil, ex)
 	if results[0].Passed || fe.calls != 1 {
 		t.Fatalf("calls = %d results = %+v", fe.calls, results)
+	}
+}
+
+type ifaceSeqExec struct {
+	calls int
+}
+
+func (f *ifaceSeqExec) Exec(context.Context, string, string) (engine.Result, error) {
+	return engine.Result{Code: 0}, nil
+}
+
+func (f *ifaceSeqExec) InspectInterfaces(context.Context, string) (map[string][]engine.InspectInterface, error) {
+	f.calls++
+	state := "down"
+	if f.calls >= 2 {
+		state = "up"
+	}
+	return map[string][]engine.InspectInterface{"n1": {{Name: "eth1", State: state}}}, nil
+}
+
+func TestRunExerciseWaitReloadsInterfaces(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Assertions: []content.Assertion{
+		{Name: "up", Type: "interface", Node: "n1", Interface: "eth1", State: "up", Wait: "3s"},
+	}}
+	fe := &ifaceSeqExec{}
+	results := RunExercise(context.Background(), fe, nil, ex)
+	if len(results) != 1 || !results[0].Passed {
+		t.Fatalf("results = %+v (inspect calls=%d)", results, fe.calls)
+	}
+	if fe.calls < 2 {
+		t.Fatalf("expected interface inspect to reload on retry, calls=%d", fe.calls)
 	}
 }

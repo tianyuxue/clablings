@@ -49,9 +49,6 @@ func RunFiltered(ctx context.Context, exec Executor, topo *engine.Topology, ex *
 		}
 
 		runOnce := func(reload bool) Result {
-			if reload {
-				ifacesLoaded = false
-			}
 			actx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			switch a.Type {
@@ -60,6 +57,9 @@ func RunFiltered(ctx context.Context, exec Executor, topo *engine.Topology, ex *
 			case "file":
 				return runFile(actx, exec, ex, a)
 			case "interface", "link":
+				if reload {
+					ifacesLoaded = false
+				}
 				loadIfaces(actx)
 				if ifacesErr != nil {
 					return Result{Passed: false, Expected: "readable node interface state", Actual: "containerlab inspect interfaces failed", Err: ifacesErr}
@@ -73,13 +73,28 @@ func RunFiltered(ctx context.Context, exec Executor, topo *engine.Topology, ex *
 			}
 		}
 
-		res := runOnce(false)
+		var deadline time.Time
 		if wait > 0 {
-			deadline := time.Now().Add(wait)
-			for !res.Passed && time.Now().Before(deadline) {
-				time.Sleep(pollInterval)
-				res = runOnce(true)
+			deadline = time.Now().Add(wait)
+		}
+		res := runOnce(false)
+		for wait > 0 && !res.Passed && ctx.Err() == nil {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				break
 			}
+			d := pollInterval
+			if remaining < d {
+				d = remaining
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(d):
+			}
+			if ctx.Err() != nil || time.Until(deadline) <= 0 {
+				break
+			}
+			res = runOnce(true)
 		}
 
 		res.Exercise = ex.FullID()
