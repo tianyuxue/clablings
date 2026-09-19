@@ -38,8 +38,12 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	answers := make([][]int, len(ex.Questions))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
+		redraw := false
 		for {
-			watch.WriteLegend(out)
+			if redraw {
+				watch.WriteLegend(out)
+			}
+			redraw = false
 			fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
 			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
 			for oi := range q.Options {
@@ -52,7 +56,8 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 			fmt.Fprintf(out, "%s> ", prompt)
 			line, err := readQuizLine(ctx, in, out, help)
 			if errors.Is(err, errQuizHelp) {
-				continue // redraw the question and prompt
+				redraw = true // reprint legend and question
+				continue
 			}
 			if err != nil {
 				return nil, err
