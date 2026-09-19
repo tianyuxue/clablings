@@ -93,11 +93,11 @@ func TestWatchLoopEnterCompletes(t *testing.T) {
 	if err := sess.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	enterCh := make(chan struct{}, 1)
-	enterCh <- struct{}{}
+	keyCh := make(chan watch.Key, 1)
+	keyCh <- watch.KeyEnter
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, enterCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "all exercises complete") {
@@ -119,13 +119,13 @@ func TestWatchLoopVerifyErrorDoesNotPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	enterCh := make(chan struct{}, 1)
+	keyCh := make(chan watch.Key, 1)
 	tick := make(chan time.Time, 2)
-	enterCh <- struct{}{}
+	keyCh <- watch.KeyEnter
 
 	var out, errOut bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(ctx, sess, lib, cfg, enterCh, tick, &out, &errOut) }()
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, keyCh, tick, &out, &errOut) }()
 
 	time.Sleep(20 * time.Millisecond) // let enter be processed
 	tick <- time.Now()                // previously panicked on the nil watcher
@@ -226,5 +226,32 @@ func TestMakeVerifierTopologyError(t *testing.T) {
 	eng := engine.New("containerlab", "docker")
 	if _, err := makeVerifier(eng, nil)(context.Background(), ex); err == nil {
 		t.Fatal("expected topology parse error")
+	}
+}
+
+func TestWatchLoopHintAndCleanQuit(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	sess.Current().Hints = []string{"check the MTU"}
+	keyCh := make(chan watch.Key, 2)
+	keyCh <- watch.KeyHint
+	keyCh <- watch.KeyCleanQuit
+	tick := make(chan time.Time)
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if !strings.Contains(out.String(), "check the MTU") {
+		t.Fatalf("out = %q", out.String())
 	}
 }

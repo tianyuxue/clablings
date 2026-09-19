@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 
@@ -41,6 +42,9 @@ func newWatchCmd() *cobra.Command {
 }
 
 func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(errOut, "warning: reading config failed, using defaults: %v\n", err)
@@ -60,6 +64,19 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		}
 		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
+
+	rawActive := false
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		if raw := watch.MakeRaw(int(os.Stdin.Fd())); raw != nil {
+			defer term.Restore(int(os.Stdin.Fd()), raw)
+			rawActive = true
+		}
+	}
+	if rawActive {
+		out = watch.NewCRLFWriter(out)
+		errOut = watch.NewCRLFWriter(errOut)
+	}
+
 	eng := engine.New(clabBin, dockerBin)
 	builder := build.New(eng.Runner(), dockerBin, cfg.Build.DefaultImage)
 	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
@@ -70,6 +87,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		Reset:   res,
 		Verify:  makeVerifier(eng, builder),
 		Report:  func(r []assert.Result) { report.Text(out, r) },
+		Status:  func(m string) { fmt.Fprintln(out, m) },
 	})
 	if initialID != "" {
 		if err := sess.Run(ctx, initialID); err != nil {
@@ -78,22 +96,23 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	} else if err := sess.Start(ctx); err != nil {
 		return err
 	}
-	printProgress(sess, lib, out)
 
 	ticker := time.NewTicker(cfg.Watch.PollInterval)
 	defer ticker.Stop()
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		if raw := watch.MakeRaw(int(os.Stdin.Fd())); raw != nil {
-			defer term.Restore(int(os.Stdin.Fd()), raw)
-			enterCh := make(chan struct{}, 1)
-			go watch.ReadEnter(os.Stdin, enterCh)
-			return watchLoop(ctx, sess, lib, cfg, enterCh, ticker.C, out, errOut)
-		}
+
+	if rawActive {
+		keyCh := make(chan watch.Key, 1)
+		go watch.ReadKeys(os.Stdin, keyCh)
+		printProgress(sess, lib, out)
+		watch.WriteLegend(out)
+		return watchLoop(ctx, sess, lib, cfg, keyCh, ticker.C, out, errOut)
 	}
+	printProgress(sess, lib, out)
+	watch.WriteLegend(out)
 	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C, out, errOut)
 }
 
-func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, enterCh <-chan struct{}, tick <-chan time.Time, out, errOut io.Writer) error {
+func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, keyCh <-chan watch.Key, tick <-chan time.Time, out, errOut io.Writer) error {
 	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := w.Scan(); err != nil {
 		fmt.Fprintf(errOut, "warning: %v\n", err)
@@ -102,16 +121,45 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-enterCh:
-			next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
-			if err != nil {
-				return err
-			}
-			if done {
+		case k := <-keyCh:
+			switch k {
+			case watch.KeyEnter:
+				drainKeys(keyCh)
+				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
+				if err != nil {
+					return err
+				}
+				if done {
+					return nil
+				}
+				if next != nil {
+					w = next
+				}
+				watch.WriteLegend(out)
+			case watch.KeyHint:
+				watch.WriteHints(out, sess.Current())
+				watch.WriteLegend(out)
+			case watch.KeyRedeploy:
+				drainKeys(keyCh)
+				if err := sess.ResetCurrent(ctx, true); err != nil {
+					fmt.Fprintf(errOut, "reset error: %v\n", err)
+				}
+				watch.WriteLegend(out)
+			case watch.KeyFastReset:
+				drainKeys(keyCh)
+				if err := sess.ResetCurrent(ctx, false); err != nil {
+					fmt.Fprintf(errOut, "reset error: %v\n", err)
+				}
+				watch.WriteLegend(out)
+			case watch.KeyQuit:
+				fmt.Fprintln(out, "containers kept running; press x to clean up")
 				return nil
-			}
-			if next != nil {
-				w = next
+			case watch.KeyCleanQuit:
+				if err := sess.Cleanup(ctx); err != nil {
+					fmt.Fprintf(errOut, "cleanup error: %v\n", err)
+					return err
+				}
+				return nil
 			}
 		case <-tick:
 			if _, err := w.Scan(); err != nil {
@@ -129,7 +177,19 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if next != nil {
 					w = next
 				}
+				watch.WriteLegend(out)
 			}
+		}
+	}
+}
+
+// drainKeys discards keys queued while a blocking action ran.
+func drainKeys(ch <-chan watch.Key) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
 		}
 	}
 }
