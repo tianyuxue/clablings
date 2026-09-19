@@ -61,9 +61,22 @@ func TestEngineEmptyLabNameOmitsNameFlag(t *testing.T) {
 	fr := &fakeRunner{}
 	e := NewWithRunner(fr, "containerlab", "docker")
 	_, _ = e.Deploy(context.Background(), "/t.yml", "", time.Minute)
-	want := []string{"containerlab", "deploy", "-t", "/t.yml", "--timeout", "1m0s"}
-	if !reflect.DeepEqual(fr.calls[0], want) {
-		t.Fatalf("calls[0] = %v, want %v", fr.calls[0], want)
+	_, _ = e.Destroy(context.Background(), "/t.yml", "")
+	_, _ = e.Redeploy(context.Background(), "/t.yml", "", time.Minute)
+	_, _ = e.Inspect(context.Background(), "/t.yml", "")
+	wants := [][]string{
+		{"containerlab", "deploy", "-t", "/t.yml", "--timeout", "1m0s"},
+		{"containerlab", "destroy", "-t", "/t.yml", "--cleanup"},
+		{"containerlab", "redeploy", "-t", "/t.yml", "--cleanup", "--timeout", "1m0s"},
+		{"containerlab", "inspect", "-t", "/t.yml", "-f", "json"},
+	}
+	if len(fr.calls) != len(wants) {
+		t.Fatalf("calls = %v", fr.calls)
+	}
+	for i := range wants {
+		if !reflect.DeepEqual(fr.calls[i], wants[i]) {
+			t.Fatalf("calls[%d] = %v, want %v", i, fr.calls[i], wants[i])
+		}
 	}
 }
 

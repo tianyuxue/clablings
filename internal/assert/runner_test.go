@@ -56,6 +56,9 @@ func TestLabName(t *testing.T) {
 	if got := labName(&content.Exercise{ChapterRef: &content.Chapter{TopologyName: "lab"}}); got != "lab" {
 		t.Fatalf("labName = %q", got)
 	}
+	if got := labName(&content.Exercise{ChapterRef: &content.Chapter{TopologyName: "lab", LabName: "inst-lab"}}); got != "inst-lab" {
+		t.Fatalf("labName should prefer LabName, got %q", got)
+	}
 	if got := labName(&content.Exercise{}); got != "" {
 		t.Fatalf("labName = %q, want empty", got)
 	}

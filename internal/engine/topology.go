@@ -99,15 +99,22 @@ func ContainerName(lab, node string) string {
 	return "clab-" + lab + "-" + node
 }
 
+// LabNameFor returns the containerlab lab name for an exercise's chapter:
+// the instance-derived LabName when present, otherwise the topology name.
+func LabNameFor(ex *content.Exercise) string {
+	if ex.ChapterRef == nil {
+		return ""
+	}
+	if ex.ChapterRef.LabName != "" {
+		return ex.ChapterRef.LabName
+	}
+	return ex.ChapterRef.TopologyName
+}
+
 // ContainerNameFor returns the containerlab container name for an exercise's node.
 func ContainerNameFor(ex *content.Exercise, node string) string {
-	if ex.ChapterRef != nil {
-		if ex.ChapterRef.LabName != "" {
-			return ContainerName(ex.ChapterRef.LabName, node)
-		}
-		if ex.ChapterRef.TopologyName != "" {
-			return ContainerName(ex.ChapterRef.TopologyName, node)
-		}
+	if lab := LabNameFor(ex); lab != "" {
+		return ContainerName(lab, node)
 	}
 	return node
 }

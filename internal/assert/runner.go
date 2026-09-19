@@ -35,9 +35,7 @@ func containerName(ex *content.Exercise, node string) string {
 	return engine.ContainerNameFor(ex, node)
 }
 
+// labName derives the containerlab lab name for an exercise's chapter.
 func labName(ex *content.Exercise) string {
-	if ex.ChapterRef != nil {
-		return ex.ChapterRef.TopologyName
-	}
-	return ""
+	return engine.LabNameFor(ex)
 }
