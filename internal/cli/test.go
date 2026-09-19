@@ -188,7 +188,7 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 	}
 
 	if len(allResults) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "warning: no exercises were verified (quizzes are skipped without --answers)")
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning: no exercises were verified (quizzes are skipped without --answers)")
 	}
 
 	if format == "json" {
