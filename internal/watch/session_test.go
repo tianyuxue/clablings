@@ -255,8 +255,12 @@ func TestSessionQuizRequiresHandler(t *testing.T) {
 	ch.Exercises[0].Type = content.TypeQuiz
 	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
 		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
-	if err := s.Start(context.Background()); err == nil {
+	err := s.Start(context.Background())
+	if err == nil {
 		t.Fatal("expected error reaching a quiz without a handler")
+	}
+	if !errors.Is(err, ErrQuizUnsupported) {
+		t.Fatalf("err = %v, want ErrQuizUnsupported", err)
 	}
 }
 

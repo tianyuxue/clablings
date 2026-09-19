@@ -162,7 +162,7 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 	var err error
 	if ex.Type == content.TypeQuiz {
 		if s.opts.Quiz == nil {
-			return fmt.Errorf("exercise %s is a quiz; interactive quizzes are not supported yet (use `clablings test --answers`)", ex.FullID())
+			return fmt.Errorf("%w: exercise %s (use `clablings test --answers`)", ErrQuizUnsupported, ex.FullID())
 		}
 		results, err = s.opts.Quiz(ctx, ex)
 	} else {
@@ -244,7 +244,7 @@ func (s *Session) activate(ctx context.Context, ex *content.Exercise) error {
 // downgrading an already-passed exercise), and runs the fast reset.
 func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) error {
 	if ex.Type == content.TypeQuiz && s.opts.Quiz == nil {
-		return fmt.Errorf("exercise %s is a quiz; interactive quizzes are not supported yet (use `clablings test --answers`)", ex.FullID())
+		return fmt.Errorf("%w: exercise %s (use `clablings test --answers`)", ErrQuizUnsupported, ex.FullID())
 	}
 	s.current = ex
 	s.opts.State.SetCurrent(ex.FullID())

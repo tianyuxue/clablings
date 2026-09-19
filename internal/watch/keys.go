@@ -1,6 +1,16 @@
 package watch
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+// ErrQuizAborted is returned when the user aborts an interactive quiz.
+var ErrQuizAborted = errors.New("quiz aborted")
+
+// ErrQuizUnsupported is returned when a quiz is reached without an interactive
+// handler (e.g. non-TTY runs).
+var ErrQuizUnsupported = errors.New("interactive quiz not supported")
 
 // Key is a recognized watch key press.
 type Key int
@@ -12,29 +22,11 @@ const (
 	KeyFastReset
 	KeyQuit
 	KeyCleanQuit
+	KeyConcept
 )
 
-// ReadKeys reads bytes from r and emits one Key per recognized byte until r
-// errors or EOF. Unknown bytes are ignored; a full channel drops the event.
-func ReadKeys(r io.Reader, ch chan<- Key) {
-	buf := make([]byte, 1)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			if k, ok := keyFor(buf[0]); ok {
-				select {
-				case ch <- k:
-				default:
-				}
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
-func keyFor(b byte) (Key, bool) {
+// KeyFor maps a byte to a Key; ok is false for unmapped bytes.
+func KeyFor(b byte) (Key, bool) {
 	switch b {
 	case '\n', '\r':
 		return KeyEnter, true
@@ -48,6 +40,27 @@ func keyFor(b byte) (Key, bool) {
 		return KeyQuit, true
 	case 'x', 'X':
 		return KeyCleanQuit, true
+	case 'c', 'C':
+		return KeyConcept, true
 	}
 	return 0, false
+}
+
+// ReadBytes copies single bytes from r into ch until r errors or EOF. A full
+// channel drops the byte. This is the single reader that owns stdin; callers
+// demultiplex bytes into keys or quiz input.
+func ReadBytes(r io.Reader, ch chan<- byte) {
+	buf := make([]byte, 1)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			select {
+			case ch <- buf[0]:
+			default:
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
 }

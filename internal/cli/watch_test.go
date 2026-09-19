@@ -93,11 +93,11 @@ func TestWatchLoopEnterCompletes(t *testing.T) {
 	if err := sess.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	keyCh := make(chan watch.Key, 1)
-	keyCh <- watch.KeyEnter
+	keyCh := make(chan byte, 1)
+	keyCh <- '\n'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "all exercises complete") {
@@ -119,13 +119,13 @@ func TestWatchLoopVerifyErrorDoesNotPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	keyCh := make(chan watch.Key, 1)
+	keyCh := make(chan byte, 1)
 	tick := make(chan time.Time, 2)
-	keyCh <- watch.KeyEnter
+	keyCh <- '\n'
 
 	var out, errOut bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(ctx, sess, lib, cfg, keyCh, tick, &out, &errOut) }()
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, "en", keyCh, tick, &out, &errOut) }()
 
 	time.Sleep(20 * time.Millisecond) // let enter be processed
 	tick <- time.Now()                // previously panicked on the nil watcher
@@ -244,13 +244,13 @@ func TestWatchLoopHintAndCleanQuit(t *testing.T) {
 		t.Fatal(err)
 	}
 	sess.Current().Hints = []string{"check the MTU"}
-	keyCh := make(chan watch.Key, 2)
-	keyCh <- watch.KeyHint
-	keyCh <- watch.KeyCleanQuit
+	keyCh := make(chan byte, 2)
+	keyCh <- 'h'
+	keyCh <- 'x'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out) }()
+	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -277,14 +277,46 @@ func TestWatchLoopQuitNotice(t *testing.T) {
 	if err := sess.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	keyCh := make(chan watch.Key, 1)
-	keyCh <- watch.KeyQuit
+	keyCh := make(chan byte, 1)
+	keyCh <- 'q'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "containers kept running") {
 		t.Fatalf("out = %q", out.String())
+	}
+}
+
+func TestWatchLoopConceptKey(t *testing.T) {
+	dir := t.TempDir()
+	chDir := filepath.Join(dir, "chapters", "c1")
+	if err := os.MkdirAll(chDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(chDir, "concept.en.md"), []byte("# Switching\n\nwhy L2.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lib, st := oneExerciseLibrary(t)
+	lib.Chapters[0].Dir = chDir
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 2)
+	keyCh <- 'c'
+	keyCh <- 'q'
+	tick := make(chan time.Time)
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if !strings.Contains(out.String(), "why L2.") {
+		t.Fatalf("concept not shown:\n%s", out.String())
 	}
 }

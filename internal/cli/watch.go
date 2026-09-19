@@ -52,7 +52,8 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	clabBin := binOr(cfg.Containerlab.BinPath, "containerlab")
 	dockerBin := binOr(cfg.Docker.BinPath, "docker")
 
-	lib, err := content.LoadWithLocale(root, locale(errOut))
+	loc := locale(errOut)
+	lib, err := content.LoadWithLocale(root, loc)
 	if err != nil {
 		return err
 	}
@@ -81,6 +82,16 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		}
 	}
 
+	var byteCh chan byte
+	var quizHandler func(context.Context, *content.Exercise) ([]assert.Result, error)
+	if rawActive {
+		byteCh = make(chan byte, 64)
+		go watch.ReadBytes(os.Stdin, byteCh)
+		quizHandler = func(qctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			return nil, fmt.Errorf("%w: exercise %s", watch.ErrQuizUnsupported, ex.FullID())
+		}
+	}
+
 	eng := engine.New(clabBin, dockerBin)
 	builder := build.New(eng.Runner(), dockerBin, cfg.Build.DefaultImage)
 	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
@@ -90,6 +101,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		Engine:  newLifecycleAdapter(eng),
 		Reset:   res,
 		Verify:  makeVerifier(eng, builder),
+		Quiz:    quizHandler,
 		Report:  func(r []assert.Result) { report.Text(out, r) },
 		Status:  func(m string) { fmt.Fprintln(out, m) },
 	})
@@ -105,27 +117,45 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	defer ticker.Stop()
 
 	if rawActive {
-		keyCh := make(chan watch.Key, 1)
-		go watch.ReadKeys(os.Stdin, keyCh)
 		printProgress(sess, lib, out)
 		watch.WriteLegend(out)
-		return watchLoop(ctx, sess, lib, cfg, keyCh, ticker.C, out, errOut)
+		return watchLoop(ctx, sess, lib, cfg, loc, byteCh, ticker.C, out, errOut)
 	}
 	printProgress(sess, lib, out)
-	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C, out, errOut)
+	return watchLoop(ctx, sess, lib, cfg, loc, nil, ticker.C, out, errOut)
 }
 
-func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, keyCh <-chan watch.Key, tick <-chan time.Time, out, errOut io.Writer) error {
-	interactive := keyCh != nil
+func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, loc string, byteCh <-chan byte, tick <-chan time.Time, out, errOut io.Writer) error {
+	interactive := byteCh != nil
 	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := w.Scan(); err != nil {
 		fmt.Fprintf(errOut, "warning: %v\n", err)
 	}
 	for {
+		if cur := sess.Current(); cur != nil && cur.Type == content.TypeQuiz {
+			next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
+			if next != nil {
+				w = next
+			}
+			if interactive {
+				watch.WriteLegend(out)
+			}
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return handleQuit(ctx, sess, false, out, errOut)
-		case k := <-keyCh:
+		case b := <-byteCh:
+			k, ok := watch.KeyFor(b)
+			if !ok {
+				continue
+			}
 			switch k {
 			case watch.KeyEnter:
 				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
@@ -138,7 +168,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if next != nil {
 					w = next
 				}
-				if quit, clean := drainKeys(keyCh); quit || clean {
+				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
 				}
 				if interactive {
@@ -149,11 +179,20 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if interactive {
 					watch.WriteLegend(out)
 				}
+			case watch.KeyConcept:
+				if cur := sess.Current(); cur != nil && cur.ChapterRef != nil {
+					if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
+						fmt.Fprintf(errOut, "read error: %v\n", err)
+					}
+				}
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			case watch.KeyRedeploy:
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
 				}
-				if quit, clean := drainKeys(keyCh); quit || clean {
+				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
 				}
 				if interactive {
@@ -163,7 +202,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if err := sess.ResetCurrent(ctx, false); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
 				}
-				if quit, clean := drainKeys(keyCh); quit || clean {
+				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
 				}
 				if interactive {
@@ -190,7 +229,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if next != nil {
 					w = next
 				}
-				if quit, clean := drainKeys(keyCh); quit || clean {
+				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
 				}
 				if interactive {
@@ -218,12 +257,16 @@ func handleQuit(ctx context.Context, sess *watch.Session, clean bool, out, errOu
 	return nil
 }
 
-// drainKeys discards keys buffered during a blocking action and reports whether
-// a quit or clean-quit was requested among them.
-func drainKeys(ch <-chan watch.Key) (quit, cleanQuit bool) {
+// drainKeys discards input buffered during a blocking action, reporting whether
+// a quit or clean-quit was requested among buffered bytes.
+func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 	for {
 		select {
-		case k := <-ch:
+		case b := <-ch:
+			k, ok := watch.KeyFor(b)
+			if !ok {
+				continue
+			}
 			switch k {
 			case watch.KeyQuit:
 				quit = true
@@ -242,6 +285,12 @@ func drainKeys(ch <-chan watch.Key) (quit, cleanQuit bool) {
 // existing watcher.
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
 	if err := sess.VerifyNow(ctx); err != nil {
+		if errors.Is(err, watch.ErrQuizAborted) {
+			return nil, true, nil
+		}
+		if errors.Is(err, watch.ErrQuizUnsupported) {
+			return nil, false, err
+		}
 		fmt.Fprintf(errOut, "verify error: %v\n", err)
 		return nil, false, nil
 	}
