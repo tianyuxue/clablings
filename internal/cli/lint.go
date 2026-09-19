@@ -73,9 +73,6 @@ func lintLibrary(root string) ([]string, error) {
 				}
 			}
 		} else {
-			if len(ch.Setup) > 0 || len(ch.Teardown) > 0 {
-				problems = append(problems, fmt.Sprintf("chapter %s: setup/teardown require a topology", ch.ID))
-			}
 			for _, ex := range ch.Exercises {
 				for i, a := range ex.Assertions {
 					if a.Type == "exec" || a.Type == "interface" || a.Type == "link" || a.Node != "" || a.Path != "" {

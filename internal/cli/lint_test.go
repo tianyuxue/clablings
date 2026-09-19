@@ -78,3 +78,29 @@ func TestLintTopologylessContainerAssertion(t *testing.T) {
 		t.Fatalf("out = %q", out.String())
 	}
 }
+
+func TestLintTopologylessHostSetupAllowed(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, s string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("clablings.yaml", "version: 1\nchapters:\n  - chapters/c1\n")
+	write("chapters/c1/chapter.yaml", "id: c1\ntitle: {en: t, zh: t}\nsetup:\n  - \"true\"\n")
+	write("chapters/c1/exercises/e1/exercise.yaml", "id: e1\ntitle: {en: t, zh: t}\ntype: config-fix\nassertions:\n  - name: {en: a, zh: a}\n    type: file\n    source: main.c\n")
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("lint: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "ok:") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
