@@ -14,8 +14,23 @@ import (
 )
 
 // runQuiz interactively asks each question until every answer is correct and
-// returns the final (all-correct) grading results.
-func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exercise) ([]assert.Result, error) {
+// returns the final (all-correct) grading results. loc selects the language for
+// the `c` concept help.
+func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exercise, loc string) ([]assert.Result, error) {
+	help := func(b byte) bool {
+		switch b {
+		case 'h', 'H':
+			watch.WriteHints(out, ex)
+			return true
+		case 'c', 'C':
+			if ex.ChapterRef != nil {
+				_ = printChapterRead(out, ex.ChapterRef, loc)
+			}
+			return true
+		}
+		return false
+	}
+	fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
 	answers := make([][]int, len(ex.Questions))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
@@ -29,7 +44,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 				prompt = "answers (comma-separated)"
 			}
 			fmt.Fprintf(out, "%s> ", prompt)
-			line, err := readQuizLine(ctx, in, out)
+			line, err := readQuizLine(ctx, in, out, help)
 			if err != nil {
 				return nil, err
 			}
@@ -49,10 +64,10 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	return assert.GradeQuiz(ex, answers), nil
 }
 
-// readQuizLine reads one line, echoing printable bytes, until Enter. Ctrl+C,
-// a closed input stream, or a cancelled context returns an error. ANSI CSI
-// escape sequences (e.g. arrow keys) are ignored.
-func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer) (string, error) {
+// readQuizLine reads one line, echoing printable bytes, until Enter. Ctrl+C, q,
+// a closed input stream, or a cancelled context aborts. h/c are passed to help
+// (when non-nil). ANSI CSI escape sequences (e.g. arrow keys) are ignored.
+func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool) (string, error) {
 	var buf []byte
 	esc := false // saw ESC
 	csi := false // inside ESC [ ... sequence
@@ -74,6 +89,16 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer) (string, e
 				esc = false
 				if b == '[' {
 					csi = true
+				}
+				continue
+			}
+			if b == 'q' || b == 'Q' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizAborted
+			}
+			if help != nil && (b == 'h' || b == 'H' || b == 'c' || b == 'C') {
+				if help(b) {
+					fmt.Fprint(out, "answer> ")
 				}
 				continue
 			}

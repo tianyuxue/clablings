@@ -88,7 +88,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		byteCh = make(chan byte, 256)
 		go watch.ReadBytes(os.Stdin, byteCh)
 		quizHandler = func(qctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
-			return runQuiz(qctx, byteCh, out, ex)
+			return runQuiz(qctx, byteCh, out, ex, loc)
 		}
 	}
 
