@@ -17,6 +17,7 @@ func newDebugCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "debug",
 		Short: "Launch clab-tui on the current chapter's shared topology",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveRoot(root)
 			if err != nil {
@@ -34,16 +35,16 @@ func newDebugCmd() *cobra.Command {
 			if ch == nil {
 				return fmt.Errorf("not inside a chapter directory; run from the chapter containing chapter.yaml")
 			}
-			topo, err := engine.PrepareTopology(ch)
-			if err != nil {
-				return fmt.Errorf("chapter %s: %w", ch.ID, err)
-			}
 			bin, err := exec.LookPath("clab-tui")
 			if err != nil {
 				return fmt.Errorf("clab-tui not found in PATH: %w", err)
 			}
+			topo, err := engine.PrepareTopology(ch)
+			if err != nil {
+				return fmt.Errorf("chapter %s: %w", ch.ID, err)
+			}
 			c := exec.CommandContext(cmd.Context(), bin, "--file", topo)
-			c.Stdin = os.Stdin
+			c.Stdin = cmd.InOrStdin()
 			c.Stdout = cmd.OutOrStdout()
 			c.Stderr = cmd.ErrOrStderr()
 			return c.Run()

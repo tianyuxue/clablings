@@ -8,7 +8,7 @@ clablings run <exercise_id>         # jump to an exercise
 clablings reset [--hard]            # fast / hard reset
 clablings list [--json]             # progress
 clablings test [<id>|--all] [--format text|json]  # headless verification
-clablings debug                     # launch clab-tui on this chapter's shared topology
+clablings debug [--root DIR]       # launch clab-tui on this chapter's shared topology
 ```
 
 The exercise library lives at the repository root `clab-exercises/`; see
