@@ -161,3 +161,47 @@ func TestResolveRootPrecedence(t *testing.T) {
 		t.Fatalf("resolveRoot(root) = %q, want %q", got, root)
 	}
 }
+
+func TestListJSONIncludesMetadata(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("clablings.yaml", "version: 1\nchapters:\n  - chapters/c1\n")
+	write("chapters/c1/chapter.yaml", "id: c1\ntitle: STP\ndifficulty: 3\ntags: [l2, stp]\ntopology: topology.clab.yml\n")
+	write("chapters/c1/topology.clab.yml", "name: lab-c1\ntopology:\n  nodes: {}\n")
+	write("chapters/c1/exercises/e1/exercise.yaml", "id: e1\ntitle: Root election\ntype: config-fix\ndifficulty: 2\ntags: [stp]\nassertions:\n  - name: x\n    type: exec\n    node: n1\n    cmd: \"true\"\n")
+
+	cmd := newListCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root, "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var view struct {
+		Chapters []struct {
+			Difficulty int      `json:"difficulty"`
+			Tags       []string `json:"tags"`
+			Exercises  []struct {
+				Difficulty int      `json:"difficulty"`
+				Tags       []string `json:"tags"`
+			} `json:"exercises"`
+		} `json:"chapters"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &view); err != nil {
+		t.Fatalf("json: %v\n%s", err, out.String())
+	}
+	if len(view.Chapters) != 1 || view.Chapters[0].Difficulty != 3 || len(view.Chapters[0].Tags) != 2 {
+		t.Fatalf("chapter metadata = %+v", view.Chapters)
+	}
+	if len(view.Chapters[0].Exercises) != 1 || view.Chapters[0].Exercises[0].Difficulty != 2 || len(view.Chapters[0].Exercises[0].Tags) != 1 {
+		t.Fatalf("exercise metadata = %+v", view.Chapters[0].Exercises)
+	}
+}

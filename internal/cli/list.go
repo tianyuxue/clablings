@@ -72,17 +72,24 @@ func formatLibraryText(lib *content.Library, st *state.State) string {
 }
 
 type jsonExercise struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Type     string `json:"type"`
-	Status   string `json:"status"`
-	Attempts int    `json:"attempts"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Type       string   `json:"type"`
+	Status     string   `json:"status"`
+	Attempts   int      `json:"attempts"`
+	Difficulty int      `json:"difficulty"`
+	Tags       []string `json:"tags"`
 }
 
 type jsonChapter struct {
-	ID        string         `json:"id"`
-	Title     string         `json:"title"`
-	Exercises []jsonExercise `json:"exercises"`
+	ID               string         `json:"id"`
+	Title            string         `json:"title"`
+	Difficulty       int            `json:"difficulty"`
+	Tags             []string       `json:"tags"`
+	EstimatedMinutes int            `json:"estimated_minutes"`
+	Prerequisites    []string       `json:"prerequisites"`
+	Objectives       []string       `json:"objectives"`
+	Exercises        []jsonExercise `json:"exercises"`
 }
 
 func writeJSON(cmd *cobra.Command, lib *content.Library, st *state.State) error {
@@ -93,16 +100,26 @@ func writeJSON(cmd *cobra.Command, lib *content.Library, st *state.State) error 
 	}{Root: lib.Root, Current: st.Current}
 
 	for _, ch := range lib.Chapters {
-		jc := jsonChapter{ID: ch.ID, Title: ch.Title}
+		jc := jsonChapter{
+			ID:               ch.ID,
+			Title:            ch.Title,
+			Difficulty:       ch.Difficulty,
+			Tags:             ch.Tags,
+			EstimatedMinutes: ch.EstimatedMinutes,
+			Prerequisites:    ch.Prerequisites,
+			Objectives:       ch.Objectives,
+		}
 		for i := range ch.Exercises {
 			ex := ch.Exercises[i]
 			es := st.Get(ex.FullID())
 			jc.Exercises = append(jc.Exercises, jsonExercise{
-				ID:       ex.ID,
-				Title:    ex.Title,
-				Type:     string(ex.Type),
-				Status:   string(es.Status),
-				Attempts: es.Attempts,
+				ID:         ex.ID,
+				Title:      ex.Title,
+				Type:       string(ex.Type),
+				Status:     string(es.Status),
+				Attempts:   es.Attempts,
+				Difficulty: ex.Difficulty,
+				Tags:       ex.Tags,
 			})
 		}
 		view.Chapters = append(view.Chapters, jc)
