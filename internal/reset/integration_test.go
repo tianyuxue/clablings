@@ -47,7 +47,7 @@ topology:
 	t.Cleanup(func() {
 		cctx, c := context.WithTimeout(context.Background(), time.Minute)
 		defer c()
-		res, err := eng.Destroy(cctx, topo, "")
+		res, err := eng.Destroy(cctx, topo)
 		if err != nil {
 			if deployOK {
 				t.Errorf("cleanup destroy: %v", err)
@@ -59,7 +59,7 @@ topology:
 		}
 	})
 
-	res, err := eng.Deploy(ctx, topo, "", 2*time.Minute)
+	res, err := eng.Deploy(ctx, topo, 2*time.Minute)
 	if err != nil {
 		t.Fatalf("deploy: %v", err)
 	}
@@ -68,7 +68,7 @@ topology:
 	}
 	deployOK = true
 
-	nodes, err := eng.Inspect(ctx, topo, "")
+	nodes, err := eng.Inspect(ctx, topo)
 	if err != nil {
 		t.Fatalf("inspect: %v", err)
 	}

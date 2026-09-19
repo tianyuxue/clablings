@@ -71,7 +71,11 @@ func mustWrite(t *testing.T, path, s string) {
 type noopLifecycle struct{ eng *engine.Engine }
 
 func (n *noopLifecycle) Deploy(ctx context.Context, ch *content.Chapter) error {
-	res, err := n.eng.Deploy(ctx, ch.TopologyPath, ch.LabName, 2*time.Minute)
+	topo, err := engine.PrepareTopology(ch)
+	if err != nil {
+		return err
+	}
+	res, err := n.eng.Deploy(ctx, topo, 2*time.Minute)
 	if err != nil {
 		return err
 	}
@@ -82,7 +86,11 @@ func (n *noopLifecycle) Deploy(ctx context.Context, ch *content.Chapter) error {
 }
 
 func (n *noopLifecycle) Destroy(ctx context.Context, ch *content.Chapter) error {
-	res, err := n.eng.Destroy(ctx, ch.TopologyPath, ch.LabName)
+	topo, err := engine.PrepareTopology(ch)
+	if err != nil {
+		return err
+	}
+	res, err := n.eng.Destroy(ctx, topo)
 	if err != nil {
 		return err
 	}

@@ -29,7 +29,11 @@ func newLifecycleAdapter(eng *engine.Engine) *lifecycleAdapter {
 func (a *lifecycleAdapter) Deploy(ctx context.Context, ch *content.Chapter) error {
 	dctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
 	defer cancel()
-	res, err := a.eng.Deploy(dctx, ch.TopologyPath, ch.LabName, engine.ChapterDeployTimeout(ch))
+	topo, err := engine.PrepareTopology(ch)
+	if err != nil {
+		return err
+	}
+	res, err := a.eng.Deploy(dctx, topo, engine.ChapterDeployTimeout(ch))
 	if err != nil {
 		return err
 	}
@@ -48,7 +52,11 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 	}
 	dctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
 	defer cancel()
-	res, err := a.eng.Destroy(dctx, ch.TopologyPath, ch.LabName)
+	topo, err := engine.PrepareTopology(ch)
+	if err != nil {
+		return err
+	}
+	res, err := a.eng.Destroy(dctx, topo)
 	if err != nil {
 		return err
 	}
