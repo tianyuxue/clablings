@@ -23,9 +23,12 @@ func (f *fakeEngine) Destroy(_ context.Context, ch *content.Chapter) error {
 	return nil
 }
 
-type fakeReset struct{ hard []string }
+type fakeReset struct{ fast, hard []string }
 
-func (f *fakeReset) Fast(context.Context, *content.Exercise) error { return nil }
+func (f *fakeReset) Fast(_ context.Context, ex *content.Exercise) error {
+	f.fast = append(f.fast, ex.FullID())
+	return nil
+}
 func (f *fakeReset) Hard(_ context.Context, ex *content.Exercise) error {
 	f.hard = append(f.hard, ex.FullID())
 	return nil
@@ -68,7 +71,10 @@ func TestRunAllDeploysPerChapterAndHardResets(t *testing.T) {
 	if len(fe.destroyed) != 2 || fe.destroyed[0] != "c1" || fe.destroyed[1] != "c2" {
 		t.Fatalf("destroyed = %v", fe.destroyed)
 	}
-	if len(fr.hard) != 3 {
+	if len(fr.fast) != 2 || fr.fast[0] != "c1/e1" || fr.fast[1] != "c2/e3" {
+		t.Fatalf("fast resets = %v", fr.fast)
+	}
+	if len(fr.hard) != 1 || fr.hard[0] != "c1/e2" {
 		t.Fatalf("hard resets = %v", fr.hard)
 	}
 	if got[1] != "report:c1/e1" || !slices.Contains(got, "report:c1/e2") || !slices.Contains(got, "report:c2/e3") {
