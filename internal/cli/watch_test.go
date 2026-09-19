@@ -435,3 +435,61 @@ func TestWatchLoopAutoPresentsQuiz(t *testing.T) {
 		t.Fatalf("quiz handler called %d times", called)
 	}
 }
+
+func TestWatchLoopDrainsTypeAheadAfterQuiz(t *testing.T) {
+	ch := &content.Chapter{ID: "c1"}
+	q := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
+	e2 := &content.Exercise{ID: "e2", Chapter: "c1", Type: content.TypeConfigFix, ChapterRef: ch,
+		Hints: []string{"UNIQUE_HINT_MARKER"}}
+	ch.Exercises = []*content.Exercise{q, e2}
+	lib := &content.Library{Root: t.TempDir(), Chapters: []*content.Chapter{ch},
+		Order: []*content.Exercise{q, e2}, ByID: map[string]*content.Exercise{"c1/q1": q, "c1/e2": e2}}
+	st, _ := state.Load(lib.Root)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	byteCh := make(chan byte, 2)
+	byteCh <- 'h'
+	byteCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", byteCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if strings.Contains(out.String(), "UNIQUE_HINT_MARKER") {
+		t.Fatalf("type-ahead was not drained:\n%s", out.String())
+	}
+}
+
+func TestVerifyAndReloadNonQuizCancelIsNotAbort(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, context.Canceled
+		},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	_, done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if done {
+		t.Fatal("non-quiz cancellation must not be treated as a completed quiz")
+	}
+	if strings.Contains(out.String(), "quiz aborted") {
+		t.Fatalf("non-quiz cancellation reported as quiz abort:\n%s", out.String())
+	}
+}
