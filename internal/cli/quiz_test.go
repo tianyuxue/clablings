@@ -67,6 +67,9 @@ func TestParseChoices(t *testing.T) {
 	if got, err := parseChoices("1, 3", 3, true); err != nil || len(got) != 2 || got[0] != 0 || got[1] != 2 {
 		t.Fatalf("multi = %v, %v", got, err)
 	}
+	if got, err := parseChoices("1 3", 3, true); err != nil || len(got) != 2 || got[0] != 0 || got[1] != 2 {
+		t.Fatalf("space-separated = %v, %v", got, err)
+	}
 	for _, bad := range []string{"", "0", "9", "1,1", "a"} {
 		if _, err := parseChoices(bad, 2, false); err == nil {
 			t.Fatalf("expected error for %q", bad)

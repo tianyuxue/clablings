@@ -82,15 +82,12 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 		}
 		b.WriteByte('\n')
 	}
-	if err := renderMarkdown(w, b.String()); err != nil {
-		return err
-	}
 	readings, err := content.LoadReading(ch.Dir, loc)
 	if err != nil {
 		return err
 	}
 	if len(readings) > 0 {
-		fmt.Fprintln(w, "Reading:")
+		b.WriteString("## Reading\n\n")
 		for _, r := range readings {
 			kind := ""
 			if r.Kind != "" {
@@ -104,19 +101,19 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 			if r.RFC > 0 {
 				label = fmt.Sprintf("RFC %d%s %s", r.RFC, section, r.Title)
 			}
-			fmt.Fprintf(w, "- %s%s\n", label, kind)
+			fmt.Fprintf(&b, "- %s%s\n", label, kind)
 			if r.URL != "" {
-				fmt.Fprintf(w, "  %s\n", r.URL)
+				fmt.Fprintf(&b, "  - %s\n", r.URL)
 			}
 			if r.Intro != "" {
-				fmt.Fprintf(w, "  Intro: %s\n", r.Intro)
+				fmt.Fprintf(&b, "  - Intro: %s\n", r.Intro)
 			}
 			if r.Question != "" {
-				fmt.Fprintf(w, "  Question: %s\n", r.Question)
+				fmt.Fprintf(&b, "  - Question: %s\n", r.Question)
 			}
 		}
 	}
-	return nil
+	return renderMarkdown(w, b.String())
 }
 
 // stripLeadingHeading drops a leading `# ...` title line from a concept body,

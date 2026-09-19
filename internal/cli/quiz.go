@@ -45,14 +45,14 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 				watch.WriteLegend(out)
 			}
 			redraw = false
-			fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
+			fmt.Fprintln(out, "(enter option numbers; multi-select like 1,3; h hint, c concept, q quit)")
 			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
 			for oi := range q.Options {
 				fmt.Fprintf(out, "  %d) %s\n", oi+1, q.Options[oi].Text)
 			}
 			prompt := "answer"
 			if q.Multiple {
-				prompt = "answers (comma-separated)"
+				prompt = "answers (comma or space separated, e.g. 1,3)"
 			}
 			fmt.Fprintf(out, "%s> ", prompt)
 			line, err := readQuizLine(ctx, in, out, help)
@@ -150,7 +150,7 @@ func parseChoices(line string, n int, multiple bool) ([]int, error) {
 	}
 	seen := map[int]bool{}
 	var out []int
-	for _, part := range strings.Split(line, ",") {
+	for _, part := range strings.FieldsFunc(line, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
