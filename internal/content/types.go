@@ -116,6 +116,9 @@ type Chapter struct {
 	Exercises    []*Exercise `yaml:"-"`
 }
 
+// HasTopology reports whether the chapter declares a topology.
+func (c *Chapter) HasTopology() bool { return c.TopologyPath != "" }
+
 // Exercise corresponds to exercise.yaml and its directory.
 type Exercise struct {
 	ID         string        `yaml:"id"`

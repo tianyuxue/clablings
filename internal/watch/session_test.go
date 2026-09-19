@@ -34,11 +34,11 @@ func (f *fakeReset) Hard(_ context.Context, ex *content.Exercise) error {
 }
 
 func twoChapters() *content.Library {
-	ch1 := &content.Chapter{ID: "c1", TopologyName: "lab-c1"}
+	ch1 := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab-c1"}
 	e1 := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch1}
 	e2 := &content.Exercise{ID: "e2", Chapter: "c1", ChapterRef: ch1}
 	ch1.Exercises = []*content.Exercise{e1, e2}
-	ch2 := &content.Chapter{ID: "c2", TopologyName: "lab-c2"}
+	ch2 := &content.Chapter{ID: "c2", TopologyPath: "c2/topology.clab.yml", TopologyName: "lab-c2"}
 	e3 := &content.Exercise{ID: "e3", Chapter: "c2", ChapterRef: ch2}
 	ch2.Exercises = []*content.Exercise{e3}
 	return &content.Library{
@@ -166,8 +166,8 @@ func TestSessionRunResolvesAndRejects(t *testing.T) {
 		t.Fatal("expected unknown exercise error")
 	}
 
-	ch1 := &content.Chapter{ID: "c1", TopologyName: "l1"}
-	ch2 := &content.Chapter{ID: "c2", TopologyName: "l2"}
+	ch1 := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "l1"}
+	ch2 := &content.Chapter{ID: "c2", TopologyPath: "c2/topology.clab.yml", TopologyName: "l2"}
 	d1 := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch1}
 	d2 := &content.Exercise{ID: "e1", Chapter: "c2", ChapterRef: ch2}
 	dup := &content.Library{Root: t.TempDir(), Order: []*content.Exercise{d1, d2},
@@ -223,6 +223,27 @@ func TestSessionCompletionClearsCurrent(t *testing.T) {
 	}
 	if err := s.VerifyNow(context.Background()); err == nil {
 		t.Fatal("expected error verifying with no active exercise")
+	}
+}
+
+func TestSessionQuizChapterSkipsDeploy(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	ch := &content.Chapter{ID: "c1"}
+	ex := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeConfigFix, ChapterRef: ch}
+	ch.Exercises = []*content.Exercise{ex}
+	lib := &content.Library{
+		Root: t.TempDir(), Chapters: []*content.Chapter{ch},
+		Order: []*content.Exercise{ex}, ByID: map[string]*content.Exercise{"c1/q1": ex},
+	}
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: fe, Reset: fr,
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if len(fe.deployed) != 0 || len(fe.destroyed) != 0 {
+		t.Fatalf("deployed=%v destroyed=%v, want none", fe.deployed, fe.destroyed)
 	}
 }
 

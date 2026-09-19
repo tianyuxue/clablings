@@ -27,6 +27,9 @@ func newLifecycleAdapter(eng *engine.Engine) *lifecycleAdapter {
 }
 
 func (a *lifecycleAdapter) Deploy(ctx context.Context, ch *content.Chapter) error {
+	if !ch.HasTopology() {
+		return nil
+	}
 	topo, err := engine.PrepareTopology(ch)
 	if err != nil {
 		return fmt.Errorf("chapter %s: %w", ch.ID, err)
@@ -47,6 +50,9 @@ func (a *lifecycleAdapter) Deploy(ctx context.Context, ch *content.Chapter) erro
 }
 
 func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) error {
+	if !ch.HasTopology() {
+		return nil
+	}
 	if err := engine.RunHostCommands(ctx, ch.Teardown); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: chapter %s teardown failed: %v\n", ch.ID, err)
 	}
@@ -73,7 +79,7 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 func makeVerifier(eng *engine.Engine, builder reset.Rebuilder) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 	return func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		var topo *engine.Topology
-		if ex.ChapterRef != nil {
+		if ex.ChapterRef != nil && ex.ChapterRef.TopologyPath != "" {
 			t, err := engine.ParseTopology(ex.ChapterRef.TopologyPath)
 			if err != nil {
 				return nil, fmt.Errorf("parse topology %s: %w", ex.ChapterRef.TopologyPath, err)

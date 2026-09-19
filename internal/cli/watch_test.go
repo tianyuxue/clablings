@@ -39,7 +39,7 @@ func (f *fakeWatchReset) Hard(_ context.Context, ex *content.Exercise) error { r
 
 func oneExerciseLibrary(t *testing.T) (*content.Library, *state.State) {
 	t.Helper()
-	ch := &content.Chapter{ID: "c1", TopologyName: "lab"}
+	ch := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab"}
 	ex := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch}
 	lib := &content.Library{
 		Root:     t.TempDir(),

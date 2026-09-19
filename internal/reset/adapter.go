@@ -15,6 +15,9 @@ func FromEngine(e *engine.Engine) Engine { return &engineAdapter{e: e} }
 type engineAdapter struct{ e *engine.Engine }
 
 func (a *engineAdapter) Redeploy(ctx context.Context, ch *content.Chapter) error {
+	if !ch.HasTopology() {
+		return nil
+	}
 	if err := engine.RunHostCommands(ctx, ch.Teardown); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: chapter %s teardown failed: %v\n", ch.ID, err)
 	}

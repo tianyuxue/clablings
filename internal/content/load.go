@@ -35,7 +35,9 @@ func LoadWithLocale(root, locale string) (*Library, error) {
 		if err != nil {
 			return nil, fmt.Errorf("chapter %s: %w", rel, err)
 		}
-		ch.LabName = LabName(root, instance, ch.TopologyName)
+		if ch.TopologyName != "" {
+			ch.LabName = LabName(root, instance, ch.TopologyName)
+		}
 		lib.Chapters = append(lib.Chapters, ch)
 
 		exDir := filepath.Join(chDir, "exercises")
@@ -97,22 +99,21 @@ func loadChapter(dir, locale string) (*Chapter, error) {
 	if ch.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)
 	}
-	if ch.Topology == "" {
-		return nil, fmt.Errorf("chapter %s: missing topology", ch.ID)
-	}
 	ch.Dir = dir
-	ch.TopologyPath = filepath.Join(dir, ch.Topology)
-	if _, err := os.Stat(ch.TopologyPath); err != nil {
-		return nil, fmt.Errorf("chapter %s: topology file does not exist: %w", ch.ID, err)
+	if ch.Topology != "" {
+		ch.TopologyPath = filepath.Join(dir, ch.Topology)
+		if _, err := os.Stat(ch.TopologyPath); err != nil {
+			return nil, fmt.Errorf("chapter %s: topology file does not exist: %w", ch.ID, err)
+		}
+		name, err := readTopologyName(ch.TopologyPath)
+		if err != nil {
+			return nil, fmt.Errorf("chapter %s: %w", ch.ID, err)
+		}
+		if name == "" {
+			return nil, fmt.Errorf("chapter %s: topology missing top-level name", ch.ID)
+		}
+		ch.TopologyName = name
 	}
-	name, err := readTopologyName(ch.TopologyPath)
-	if err != nil {
-		return nil, fmt.Errorf("chapter %s: %w", ch.ID, err)
-	}
-	if name == "" {
-		return nil, fmt.Errorf("chapter %s: topology missing top-level name", ch.ID)
-	}
-	ch.TopologyName = name
 	return &ch, nil
 }
 

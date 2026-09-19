@@ -71,6 +71,9 @@ func mustWrite(t *testing.T, path, s string) {
 type noopLifecycle struct{ eng *engine.Engine }
 
 func (n *noopLifecycle) Deploy(ctx context.Context, ch *content.Chapter) error {
+	if !ch.HasTopology() {
+		return nil
+	}
 	topo, err := engine.PrepareTopology(ch)
 	if err != nil {
 		return err
@@ -86,6 +89,9 @@ func (n *noopLifecycle) Deploy(ctx context.Context, ch *content.Chapter) error {
 }
 
 func (n *noopLifecycle) Destroy(ctx context.Context, ch *content.Chapter) error {
+	if !ch.HasTopology() {
+		return nil
+	}
 	topo, err := engine.PrepareTopology(ch)
 	if err != nil {
 		return err

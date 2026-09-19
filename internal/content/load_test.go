@@ -132,14 +132,6 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "chapter missing topology",
-			want: "missing topology",
-			setup: func(t *testing.T, root string) {
-				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
-				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: t\n")
-			},
-		},
-		{
 			name: "topology file does not exist",
 			want: "topology file does not exist",
 			setup: func(t *testing.T, root string) {
@@ -199,6 +191,21 @@ func TestLoadErrors(t *testing.T) {
 				t.Fatalf("err = %v, want to contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadChapterWithoutTopology(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters:\n  - chapters/c1\n")
+	writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: Concepts\ntopology: \"\"\n")
+	writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "q1", "exercise.yaml"), "id: q1\ntype: config-fix\n")
+	lib, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	ch := lib.Chapters[0]
+	if ch.TopologyPath != "" || ch.LabName != "" || ch.HasTopology() {
+		t.Fatalf("chapter = %+v", ch)
 	}
 }
 
