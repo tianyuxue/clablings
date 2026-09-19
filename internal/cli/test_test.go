@@ -31,6 +31,17 @@ func TestParseTestArgs(t *testing.T) {
 	}
 }
 
+func TestTestCmdAnswersFlag(t *testing.T) {
+	cmd := newTestCmd()
+	f := cmd.Flags().Lookup("answers")
+	if f == nil {
+		t.Fatal("--answers flag is not registered")
+	}
+	if f.DefValue != "" {
+		t.Fatalf("--answers default = %q", f.DefValue)
+	}
+}
+
 func TestUnique(t *testing.T) {
 	got := unique([]string{"a", "", "b", "a", ""})
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {

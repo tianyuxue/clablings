@@ -17,7 +17,7 @@ type OnResult func(exerciseID string, results []assert.Result)
 
 // RunAll verifies every exercise in order: deploy/destroy per chapter, and a
 // hard reset between exercises.
-func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res watch.Resetter, verify Verify, onResult OnResult) error {
+func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res watch.Resetter, verify Verify, skip func(*content.Exercise) bool, onResult OnResult) error {
 	var current *content.Chapter
 	defer func() {
 		if current != nil {
@@ -26,6 +26,9 @@ func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res wat
 	}()
 
 	for _, ex := range lib.Order {
+		if skip != nil && skip(ex) {
+			continue
+		}
 		freshChapter := false
 		if current == nil || current.ID != ex.ChapterRef.ID {
 			if current != nil {
@@ -60,10 +63,13 @@ func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res wat
 }
 
 // RunOne verifies a single exercise (deploys its chapter first, destroys after).
-func RunOne(ctx context.Context, lib *content.Library, id string, eng watch.Engine, res watch.Resetter, verify Verify) ([]assert.Result, error) {
+func RunOne(ctx context.Context, lib *content.Library, id string, eng watch.Engine, res watch.Resetter, verify Verify, skip func(*content.Exercise) bool) ([]assert.Result, error) {
 	ex := lib.ByID[id]
 	if ex == nil {
 		return nil, errUnknownExercise(id)
+	}
+	if skip != nil && skip(ex) {
+		return nil, nil
 	}
 	if err := eng.Deploy(ctx, ex.ChapterRef); err != nil {
 		return nil, err

@@ -43,6 +43,7 @@ func TestIntegrationRunAll(t *testing.T) {
 		func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 			return assert.RunExercise(ctx, eng, nil, ex), nil
 		},
+		nil,
 		func(id string, results []assert.Result) {
 			seen++
 			if len(results) == 0 || !results[0].Passed {

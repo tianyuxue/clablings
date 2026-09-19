@@ -59,7 +59,7 @@ func TestRunAllDeploysPerChapterAndHardResets(t *testing.T) {
 	err := RunAll(context.Background(), library(), fe, fr, func(_ context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		got = append(got, ex.FullID())
 		return []assert.Result{{Passed: ex.ID != "e2"}}, nil
-	}, func(id string, results []assert.Result) {
+	}, nil, func(id string, results []assert.Result) {
 		got = append(got, "report:"+id)
 	})
 	if err != nil {
@@ -82,6 +82,27 @@ func TestRunAllDeploysPerChapterAndHardResets(t *testing.T) {
 	}
 }
 
+func TestRunAllSkip(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	var ran []string
+	err := RunAll(context.Background(), library(), fe, fr,
+		func(_ context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			ran = append(ran, ex.FullID())
+			return []assert.Result{{Passed: true}}, nil
+		},
+		func(ex *content.Exercise) bool { return ex.ID == "e2" },
+		nil)
+	if err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+	for _, id := range ran {
+		if id == "c1/e2" {
+			t.Fatalf("skipped exercise was verified: %v", ran)
+		}
+	}
+}
+
 func TestRunOneDeploysResetsVerifiesAndDestroys(t *testing.T) {
 	fe := &fakeEngine{}
 	fr := &fakeReset{}
@@ -89,7 +110,7 @@ func TestRunOneDeploysResetsVerifiesAndDestroys(t *testing.T) {
 	results, err := RunOne(context.Background(), library(), "c2/e3", fe, fr, func(_ context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		verified = ex.FullID()
 		return []assert.Result{{Passed: true}}, nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("RunOne: %v", err)
 	}
@@ -108,7 +129,7 @@ func TestRunOneDeploysResetsVerifiesAndDestroys(t *testing.T) {
 }
 
 func TestRunOneUnknownExercise(t *testing.T) {
-	_, err := RunOne(context.Background(), library(), "nope", &fakeEngine{}, &fakeReset{}, nil)
+	_, err := RunOne(context.Background(), library(), "nope", &fakeEngine{}, &fakeReset{}, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown exercise")
 	}

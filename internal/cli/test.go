@@ -22,6 +22,7 @@ func newTestCmd() *cobra.Command {
 	var root string
 	var all bool
 	var format string
+	var answersPath string
 	cmd := &cobra.Command{
 		Use:   "test [<exercise_id>]",
 		Short: "Headless exercise verification for CI",
@@ -34,7 +35,7 @@ func newTestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			code, err := runHeadless(cmd.Context(), resolved, id, all, format, cmd)
+			code, err := runHeadless(cmd.Context(), resolved, id, all, answersPath, format, cmd)
 			if err != nil {
 				return err
 			}
@@ -47,6 +48,7 @@ func newTestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
 	cmd.Flags().BoolVar(&all, "all", false, "verify every exercise in the library")
 	cmd.Flags().StringVar(&format, "format", "text", "output format: text or json")
+	cmd.Flags().StringVar(&answersPath, "answers", "", "YAML answers file for quiz exercises")
 	cmd.SilenceUsage = true
 	return cmd
 }
@@ -87,7 +89,7 @@ func unique(in []string) []string {
 	return out
 }
 
-func runHeadless(ctx context.Context, root, id string, all bool, format string, cmd *cobra.Command) (int, error) {
+func runHeadless(ctx context.Context, root, id string, all bool, answersPath, format string, cmd *cobra.Command) (int, error) {
 	lib, err := content.LoadWithLocale(root, locale(cmd.ErrOrStderr()))
 	if err != nil {
 		return 2, err
@@ -121,7 +123,26 @@ func runHeadless(ctx context.Context, root, id string, all bool, format string, 
 
 	builder := build.New(eng.Runner(), dockerBin, cfg.Build.DefaultImage)
 	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
-	verify := makeVerifier(eng, builder)
+	answers := content.Answers{}
+	if answersPath != "" {
+		answers, err = content.LoadAnswers(answersPath)
+		if err != nil {
+			return 2, err
+		}
+	}
+	baseVerify := makeVerifier(eng, builder)
+	verify := func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+		if ex.Type == content.TypeQuiz {
+			if ans, ok := answers[ex.FullID()]; ok {
+				return assert.GradeQuiz(ex, ans), nil
+			}
+			return nil, nil
+		}
+		return baseVerify(ctx, ex)
+	}
+	skip := func(ex *content.Exercise) bool {
+		return ex.Type == content.TypeQuiz && answers[ex.FullID()] == nil
+	}
 
 	failed := false
 	var allResults []assert.Result
@@ -138,11 +159,11 @@ func runHeadless(ctx context.Context, root, id string, all bool, format string, 
 	}
 
 	if all {
-		if err := headless.RunAll(ctx, lib, newLifecycleAdapter(eng), res, verify, emit); err != nil {
+		if err := headless.RunAll(ctx, lib, newLifecycleAdapter(eng), res, verify, skip, emit); err != nil {
 			return 2, err
 		}
 	} else {
-		results, err := headless.RunOne(ctx, lib, id, newLifecycleAdapter(eng), res, verify)
+		results, err := headless.RunOne(ctx, lib, id, newLifecycleAdapter(eng), res, verify, skip)
 		if err != nil {
 			return 2, err
 		}
