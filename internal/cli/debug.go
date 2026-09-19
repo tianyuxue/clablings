@@ -14,10 +14,12 @@ import (
 
 func newDebugCmd() *cobra.Command {
 	var root string
+	var useSudo bool
 	cmd := &cobra.Command{
-		Use:   "debug",
-		Short: "Launch clab-tui on the current chapter's shared topology",
-		Args:  cobra.NoArgs,
+		Use:          "debug",
+		Short:        "Launch clab-tui on the current chapter's shared topology",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := resolveRoot(root)
 			if err != nil {
@@ -39,11 +41,24 @@ func newDebugCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("clab-tui not found in PATH: %w", err)
 			}
+			runner := bin
+			if useSudo {
+				sudoBin, err := exec.LookPath("sudo")
+				if err != nil {
+					return fmt.Errorf("sudo not found in PATH: %w", err)
+				}
+				runner = sudoBin
+			}
 			topo, err := engine.PrepareTopology(ch)
 			if err != nil {
 				return fmt.Errorf("chapter %s: %w", ch.ID, err)
 			}
-			c := exec.CommandContext(cmd.Context(), bin, "--file", topo)
+			launchArgs := []string{"--file", topo}
+			if useSudo {
+				// sudo must receive the resolved absolute path; root's PATH may differ.
+				launchArgs = append([]string{bin}, launchArgs...)
+			}
+			c := exec.CommandContext(cmd.Context(), runner, launchArgs...)
 			c.Stdin = cmd.InOrStdin()
 			c.Stdout = cmd.OutOrStdout()
 			c.Stderr = cmd.ErrOrStderr()
@@ -51,6 +66,7 @@ func newDebugCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
+	cmd.Flags().BoolVar(&useSudo, "sudo", false, "launch clab-tui via sudo (root)")
 	return cmd
 }
 

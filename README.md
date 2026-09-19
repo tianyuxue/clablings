@@ -8,7 +8,7 @@ clablings run <exercise_id>         # jump to an exercise
 clablings reset [--hard]            # fast / hard reset
 clablings list [--json]             # progress
 clablings test [<id>|--all] [--format text|json]  # headless verification
-clablings debug [--root DIR]       # launch clab-tui on this chapter's shared topology
+clablings debug [--sudo] [--root DIR] # launch clab-tui on this chapter's shared topology
 ```
 
 The exercise library lives at the repository root `clab-exercises/`; see
@@ -43,6 +43,9 @@ default value is used.
   deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
   original (gitignored in the library repo) and runs containerlab against it.
   The library directory must therefore be writable.
+- `clablings debug` execs `clab-tui` as the current user; pass `--sudo` to launch
+  it via `sudo <clab-tui> --file <derived>` (root). The first `sudo` may prompt
+  for a password in the same terminal.
 - Running clablings with `sudo` makes `git checkout` and the derived topology
   root-owned; run `sudo chown -R "$USER" <library>` afterwards if you need to
   edit the library as your normal user.

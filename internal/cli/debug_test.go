@@ -87,3 +87,53 @@ func TestDebugErrorsWhenClabTuiMissing(t *testing.T) {
 		t.Fatalf("err = %v, want clab-tui-not-found error", err)
 	}
 }
+
+func TestDebugSudoLaunchesViaSudo(t *testing.T) {
+	root := writeDebugLibrary(t)
+	binDir := t.TempDir()
+	rec := filepath.Join(binDir, "args.txt")
+	sudoMarker := filepath.Join(binDir, "sudo-called")
+	if err := os.WriteFile(filepath.Join(binDir, "clab-tui"),
+		[]byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > "+rec+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "sudo"),
+		[]byte("#!/bin/sh\necho called > "+sudoMarker+"\nexec \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Chdir(filepath.Join(root, "chapters", "c1"))
+
+	cmd := newDebugCmd()
+	cmd.SetArgs([]string{"--root", root, "--sudo"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("debug --sudo: %v", err)
+	}
+	if _, err := os.Stat(sudoMarker); err != nil {
+		t.Fatalf("sudo was not invoked: %v", err)
+	}
+	got, err := os.ReadFile(rec)
+	if err != nil {
+		t.Fatalf("clab-tui was not invoked through sudo: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(got)), "\n")
+	if len(lines) != 2 || lines[0] != "--file" {
+		t.Fatalf("clab-tui args = %q", lines)
+	}
+}
+
+func TestDebugSudoErrorsWhenSudoMissing(t *testing.T) {
+	root := writeDebugLibrary(t)
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "clab-tui"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Chdir(filepath.Join(root, "chapters", "c1"))
+	cmd := newDebugCmd()
+	cmd.SetArgs([]string{"--root", root, "--sudo"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "sudo") {
+		t.Fatalf("err = %v, want sudo-not-found error", err)
+	}
+}
