@@ -20,6 +20,7 @@ The exercise library lives at the repository root `clab-exercises/`; see
 Optional config file `~/.config/clablings/config.yaml`:
 
 ```yaml
+language: en             # content language: en or zh
 containerlab:
   bin_path: ""          # empty = resolve from PATH
 docker:
@@ -51,5 +52,9 @@ default value is used.
   edit the library as your normal user.
 - Containers deployed by older builds (static topology names) are not matched by
   the instance-derived destroy; remove them with `containerlab destroy -t <topology>`.
+- Content language defaults to English; select Chinese with `--lang zh`,
+  `CLABLINGS_LANG=zh`, or `language: zh` in the config file (precedence in that
+  order). CLI labels stay English. `clablings read` shows a chapter's concept
+  and RFC reading slices.
 - Install with `make install` (defaults to `~/.local/bin`; override with
   `PREFIX=...`/`DESTDIR=...`). Ensure the destination is on your `PATH`.

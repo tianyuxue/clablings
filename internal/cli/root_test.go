@@ -18,3 +18,10 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("output = %q, want to contain %q", out.String(), "clablings ")
 	}
 }
+
+func TestRootHasLangFlag(t *testing.T) {
+	root := NewRootCmd()
+	if root.PersistentFlags().Lookup("lang") == nil {
+		t.Fatal("root command is missing the --lang persistent flag")
+	}
+}
