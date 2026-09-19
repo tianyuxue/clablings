@@ -140,11 +140,13 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 	ex.Hints = resolveStrings(dto.Hints, locale)
 	ex.Difficulty = dto.Difficulty
 	ex.Tags = dto.Tags
-	ex.Assertions = make([]Assertion, len(dto.Assertions))
-	for i := range dto.Assertions {
-		ex.Assertions[i] = dto.Assertions[i].Assertion
-		ex.Assertions[i].Name = dto.Assertions[i].Name.resolve(locale)
-		ex.Assertions[i].Hint = dto.Assertions[i].Hint.resolve(locale)
+	if len(dto.Assertions) > 0 {
+		ex.Assertions = make([]Assertion, len(dto.Assertions))
+		for i := range dto.Assertions {
+			ex.Assertions[i] = dto.Assertions[i].Assertion
+			ex.Assertions[i].Name = dto.Assertions[i].Name.resolve(locale)
+			ex.Assertions[i].Hint = dto.Assertions[i].Hint.resolve(locale)
+		}
 	}
 	if ex.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)

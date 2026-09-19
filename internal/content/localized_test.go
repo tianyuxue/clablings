@@ -66,8 +66,8 @@ func TestResolveStringsAndList(t *testing.T) {
 	if len(list) != 1 || list[0] != "甲" {
 		t.Fatalf("resolveLocalizedList = %v", list)
 	}
-	if resolveLocalizedList(map[string][]string{"fr": {"x"}}, "zh") != nil {
-		t.Fatal("expected nil when no match and no default")
+	if got := resolveLocalizedList(map[string][]string{"fr": {"x"}}, "zh"); len(got) != 1 || got[0] != "x" {
+		t.Fatalf("any-available fallback = %v, want [x]", got)
 	}
 	// duplicate normalized keys: deterministic (sorted key order picks "zh")
 	dup := map[string][]string{"zh-Hans": {"hans"}, "zh": {"plain"}}
@@ -78,6 +78,19 @@ func TestResolveStringsAndList(t *testing.T) {
 	enUS := map[string][]string{"en-US": {"hello"}}
 	if got := resolveLocalizedList(enUS, "zh"); len(got) != 1 || got[0] != "hello" {
 		t.Fatalf("en-US fallback = %v", got)
+	}
+}
+
+func TestResolveAnyAvailableFallback(t *testing.T) {
+	if got := (localizedString{Values: map[string]string{"fr": "bonjour"}}).resolve("de"); got != "bonjour" {
+		t.Fatalf("resolve = %q", got)
+	}
+	var l localizedString
+	if err := yaml.Unmarshal([]byte("zh: 甲\nzh-CN: 乙\n"), &l); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.resolve("zh"); got != "乙" { // document order: later duplicate wins
+		t.Fatalf("duplicate normalized keys = %q, want 乙", got)
 	}
 }
 
@@ -132,6 +145,22 @@ func TestLoadWithLocaleResolvesAndFallsBack(t *testing.T) {
 	}
 }
 
+func TestLoadExerciseNilAssertions(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\n",
+	})
+	lib, err := LoadWithLocale(root, "en")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := lib.Chapters[0].Exercises[0].Assertions; got != nil {
+		t.Fatalf("assertions = %v, want nil", got)
+	}
+}
+
 func TestLoadWithLocaleMetadata(t *testing.T) {
 	root := writeLib(t, map[string]string{
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
@@ -144,7 +173,7 @@ func TestLoadWithLocaleMetadata(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	ch := lib.Chapters[0]
-	if ch.Difficulty != 3 || len(ch.Tags) != 2 || ch.EstimatedMinutes != 30 || len(ch.Prerequisites) != 1 {
+	if ch.Difficulty != 3 || len(ch.Tags) != 2 || ch.Tags[0] != "l2" || ch.EstimatedMinutes != 30 || len(ch.Prerequisites) != 1 || ch.Prerequisites[0] != "02-vlan" {
 		t.Fatalf("metadata = %+v", ch)
 	}
 	if len(ch.Objectives) != 2 || ch.Objectives[0] != "甲" {

@@ -38,15 +38,11 @@ func (l *localizedString) UnmarshalYAML(node *yaml.Node) error {
 		l.Values = map[string]string{DefaultLocale: node.Value}
 		return nil
 	case yaml.MappingNode:
-		m := map[string]string{}
-		if err := node.Decode(&m); err != nil {
-			return err
+		values := make(map[string]string, len(node.Content)/2)
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			values[NormalizeLocale(node.Content[i].Value)] = node.Content[i+1].Value
 		}
-		normalized := make(map[string]string, len(m))
-		for k, v := range m {
-			normalized[NormalizeLocale(k)] = v
-		}
-		l.Values = normalized
+		l.Values = values
 		return nil
 	default:
 		return fmt.Errorf("localized string must be a scalar or a map, got kind %d", node.Kind)
@@ -57,7 +53,20 @@ func (l localizedString) resolve(locale string) string {
 	if s := l.Values[locale]; s != "" {
 		return s
 	}
-	return l.Values[DefaultLocale]
+	if s := l.Values[DefaultLocale]; s != "" {
+		return s
+	}
+	keys := make([]string, 0, len(l.Values))
+	for k := range l.Values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if l.Values[k] != "" {
+			return l.Values[k]
+		}
+	}
+	return ""
 }
 
 // chapterYAML is the on-disk shape of chapter.yaml. Human-text fields are
@@ -126,6 +135,12 @@ func resolveLocalizedList(in map[string][]string, locale string) []string {
 	}
 	for _, k := range keys {
 		if NormalizeLocale(k) == DefaultLocale && len(in[k]) > 0 {
+			return in[k]
+		}
+	}
+	// any available locale, deterministic by sorted key
+	for _, k := range keys {
+		if len(in[k]) > 0 {
 			return in[k]
 		}
 	}
