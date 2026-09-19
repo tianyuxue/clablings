@@ -162,3 +162,19 @@ func TestRunOneUnknownExercise(t *testing.T) {
 		t.Fatal("expected error for unknown exercise")
 	}
 }
+
+func TestRunOneQuizDoesNotDeploy(t *testing.T) {
+	ch := &content.Chapter{ID: "c1", TopologyPath: "/t.clab.yml"}
+	q := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
+	ch.Exercises = []*content.Exercise{q}
+	lib := &content.Library{Chapters: []*content.Chapter{ch}, Order: []*content.Exercise{q},
+		ByID: map[string]*content.Exercise{"c1/q1": q}}
+	fe := &fakeEngine{}
+	results, err := RunOne(context.Background(), lib, "c1/q1", fe, &fakeReset{},
+		func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		}, nil)
+	if err != nil || len(results) != 1 || len(fe.deployed) != 0 {
+		t.Fatalf("err=%v results=%d deployed=%v", err, len(results), fe.deployed)
+	}
+}

@@ -29,6 +29,17 @@ func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res wat
 		if skip != nil && skip(ex) {
 			continue
 		}
+		// Quizzes are answered from an answers file; they need no containers.
+		if ex.Type == content.TypeQuiz {
+			results, err := verify(ctx, ex)
+			if err != nil {
+				return err
+			}
+			if onResult != nil {
+				onResult(ex.FullID(), results)
+			}
+			continue
+		}
 		freshChapter := false
 		if current == nil || current.ID != ex.ChapterRef.ID {
 			if current != nil {
@@ -70,6 +81,10 @@ func RunOne(ctx context.Context, lib *content.Library, id string, eng watch.Engi
 	}
 	if skip != nil && skip(ex) {
 		return nil, nil
+	}
+	// Quizzes are graded from answers and need no containers.
+	if ex.Type == content.TypeQuiz {
+		return verify(ctx, ex)
 	}
 	if err := eng.Deploy(ctx, ex.ChapterRef); err != nil {
 		return nil, err

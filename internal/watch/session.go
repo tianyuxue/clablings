@@ -46,10 +46,10 @@ type Options struct {
 
 // Session orchestrates watch's lifecycle and advancement.
 type Session struct {
-	opts    Options
-	current *content.Exercise
-	chapter *content.Chapter
-	busy    bool
+	opts     Options
+	current  *content.Exercise
+	deployed *content.Chapter // chapter whose topology is currently deployed
+	busy     bool
 }
 
 // New builds a Session.
@@ -120,7 +120,7 @@ func (s *Session) Cleanup(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
-	s.chapter = nil
+	s.deployed = nil
 	return errors.Join(errs...)
 }
 
@@ -223,25 +223,40 @@ func (s *Session) next(ex *content.Exercise) *content.Exercise {
 	return nil
 }
 
-// activate ensures the exercise's chapter is deployed and runs setup (fast reset).
+// activate ensures the exercise's chapter is deployed (unless it is a quiz,
+// which needs no containers) and runs setup (fast reset).
 func (s *Session) activate(ctx context.Context, ex *content.Exercise) error {
-	if s.chapter == nil || s.chapter.ID != ex.ChapterRef.ID {
-		if s.chapter != nil {
-			if err := s.destroyChapter(ctx, s.chapter); err != nil {
-				return err
-			}
-			s.chapter = nil
-		}
-		if err := s.deployChapter(ctx, ex.ChapterRef); err != nil {
-			return err
-		}
+	if err := s.ensureDeployed(ctx, ex); err != nil {
+		return err
 	}
-	s.chapter = ex.ChapterRef
 	return s.setActiveAndReset(ctx, ex)
 }
 
+// ensureDeployed deploys the exercise's chapter only when the exercise needs
+// containers (non-quiz) and that chapter is not already deployed.
+func (s *Session) ensureDeployed(ctx context.Context, ex *content.Exercise) error {
+	if ex.Type == content.TypeQuiz {
+		return nil
+	}
+	if s.deployed != nil && s.deployed.ID == ex.ChapterRef.ID {
+		return nil
+	}
+	if s.deployed != nil {
+		if err := s.destroyChapter(ctx, s.deployed); err != nil {
+			return err
+		}
+		s.deployed = nil
+	}
+	if err := s.deployChapter(ctx, ex.ChapterRef); err != nil {
+		return err
+	}
+	s.deployed = ex.ChapterRef
+	return nil
+}
+
 // setActiveAndReset records ex as the current exercise, persists state (without
-// downgrading an already-passed exercise), and runs the fast reset.
+// downgrading an already-passed exercise), and runs the fast reset. Quizzes are
+// container-less, so no reset is needed.
 func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) error {
 	if ex.Type == content.TypeQuiz && s.opts.Quiz == nil {
 		return fmt.Errorf("%w: exercise %s (use `clablings test --answers`)", ErrQuizUnsupported, ex.FullID())
@@ -255,24 +270,16 @@ func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) e
 	if err := s.opts.State.Save(s.opts.Library.Root); err != nil {
 		return err
 	}
+	if ex.Type == content.TypeQuiz {
+		return nil
+	}
 	return s.opts.Reset.Fast(ctx, ex)
 }
 
 // advance switches to the next exercise after a pass and persists state.
 func (s *Session) advance(ctx context.Context, from, next *content.Exercise) error {
-	if from.ChapterRef.ID == next.ChapterRef.ID {
-		return s.setActiveAndReset(ctx, next)
-	}
-	// Cross chapter: destroy the current chapter (if any), then deploy the next.
-	if s.chapter != nil {
-		if err := s.destroyChapter(ctx, s.chapter); err != nil {
-			return err
-		}
-		s.chapter = nil
-	}
-	if err := s.deployChapter(ctx, next.ChapterRef); err != nil {
+	if err := s.ensureDeployed(ctx, next); err != nil {
 		return err
 	}
-	s.chapter = next.ChapterRef
 	return s.setActiveAndReset(ctx, next)
 }

@@ -422,3 +422,36 @@ func TestSessionCleanupBestEffort(t *testing.T) {
 		t.Fatalf("destroyed = %v, want both chapters attempted", fe.destroyed)
 	}
 }
+
+func TestSessionQuizDoesNotDeployChapter(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	ch := &content.Chapter{ID: "c1", TopologyPath: "/t.clab.yml", TopologyName: "lab-c1"}
+	q := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
+	lab := &content.Exercise{ID: "e1", Chapter: "c1", Type: content.TypeConfigFix, ChapterRef: ch}
+	ch.Exercises = []*content.Exercise{q, lab}
+	lib := &content.Library{Root: t.TempDir(), Chapters: []*content.Chapter{ch},
+		Order: []*content.Exercise{q, lab},
+		ByID:  map[string]*content.Exercise{"c1/q1": q, "c1/e1": lab}}
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: fe, Reset: fr,
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Report: func([]assert.Result) {}})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if len(fe.deployed) != 0 {
+		t.Fatalf("quiz must not deploy its chapter: %v", fe.deployed)
+	}
+	if err := s.VerifyNow(context.Background()); err != nil {
+		t.Fatalf("VerifyNow: %v", err)
+	}
+	if len(fe.deployed) != 1 || fe.deployed[0] != "c1" {
+		t.Fatalf("lab exercise should deploy the chapter: %v", fe.deployed)
+	}
+}
