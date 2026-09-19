@@ -49,10 +49,13 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	return assert.GradeQuiz(ex, answers), nil
 }
 
-// readQuizLine reads one line, echoing printable bytes, until Enter. Ctrl+C or
-// a closed input stream returns watch.ErrQuizAborted.
+// readQuizLine reads one line, echoing printable bytes, until Enter. Ctrl+C,
+// a closed input stream, or a cancelled context returns an error. ANSI CSI
+// escape sequences (e.g. arrow keys) are ignored.
 func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer) (string, error) {
 	var buf []byte
+	esc := false // saw ESC
+	csi := false // inside ESC [ ... sequence
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,7 +64,22 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer) (string, e
 			if !ok {
 				return "", watch.ErrQuizAborted
 			}
+			if csi {
+				if b >= 0x40 && b <= 0x7e { // final byte of CSI
+					csi = false
+				}
+				continue
+			}
+			if esc {
+				esc = false
+				if b == '[' {
+					csi = true
+				}
+				continue
+			}
 			switch b {
+			case 0x1b:
+				esc = true
 			case 0x03:
 				fmt.Fprintln(out)
 				return "", watch.ErrQuizAborted
@@ -127,11 +145,15 @@ func correctChoices(q *content.Question) []int {
 }
 
 func sameChoiceSet(a, b []int) bool {
-	if len(a) != len(b) {
+	sa := append([]int(nil), a...)
+	sb := append([]int(nil), b...)
+	sort.Ints(sa)
+	sort.Ints(sb)
+	if len(sa) != len(sb) {
 		return false
 	}
-	for i := range a {
-		if a[i] != b[i] {
+	for i := range sa {
+		if sa[i] != sb[i] {
 			return false
 		}
 	}

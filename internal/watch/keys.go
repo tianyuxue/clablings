@@ -50,6 +50,7 @@ func KeyFor(b byte) (Key, bool) {
 // channel drops the byte. This is the single reader that owns stdin; callers
 // demultiplex bytes into keys or quiz input.
 func ReadBytes(r io.Reader, ch chan<- byte) {
+	defer close(ch)
 	buf := make([]byte, 1)
 	for {
 		n, err := r.Read(buf)

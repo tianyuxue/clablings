@@ -76,3 +76,46 @@ func TestParseChoices(t *testing.T) {
 		t.Fatal("single-choice must reject multiple")
 	}
 }
+
+func multiSelectQuiz() *content.Exercise {
+	return &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, Questions: []content.Question{
+		{Prompt: "p", Multiple: true, Options: []content.Option{
+			{Text: "a", Correct: true},
+			{Text: "b"},
+			{Text: "c", Correct: true},
+		}},
+	}}
+}
+
+func TestRunQuizMultiSelect(t *testing.T) {
+	var out bytes.Buffer
+	results, err := runQuiz(context.Background(), feed("1,3\n"), &out, multiSelectQuiz())
+	if err != nil || !results[0].Passed {
+		t.Fatalf("results=%+v err=%v", results, err)
+	}
+}
+
+func TestRunQuizMultiSelectPartialRetry(t *testing.T) {
+	var out bytes.Buffer
+	results, err := runQuiz(context.Background(), feed("1\n1,3\n"), &out, multiSelectQuiz())
+	if err != nil || !results[0].Passed {
+		t.Fatalf("results=%+v err=%v", results, err)
+	}
+}
+
+func TestReadQuizLineBackspaceAndEscape(t *testing.T) {
+	// "2\x7f1\n" -> backspace removes '2' -> "1"; ESC[C (right arrow) ignored.
+	var out bytes.Buffer
+	line, err := readQuizLine(context.Background(), feed("2\x7f1\x1b[C\n"), &out)
+	if err != nil || line != "1" {
+		t.Fatalf("line=%q err=%v", line, err)
+	}
+}
+
+func TestReadQuizLineClosedNoNewlineAborts(t *testing.T) {
+	var out bytes.Buffer
+	_, err := readQuizLine(context.Background(), feed("1"), &out)
+	if !errors.Is(err, watch.ErrQuizAborted) {
+		t.Fatalf("err=%v, want ErrQuizAborted", err)
+	}
+}
