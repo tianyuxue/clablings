@@ -26,16 +26,34 @@ func NewWithRunner(runner Runner, clabBin, dockerBin string) *Engine {
 // Runner returns the underlying command runner (reused by build, etc.).
 func (e *Engine) Runner() Runner { return e.runner }
 
-func (e *Engine) Deploy(ctx context.Context, topoPath string, timeout time.Duration) (Result, error) {
-	return e.runner.Run(ctx, e.clabBin, "deploy", "-t", topoPath, "--timeout", timeout.String())
+func (e *Engine) Deploy(ctx context.Context, topoPath, labName string, timeout time.Duration) (Result, error) {
+	args := []string{"deploy", "-t", topoPath}
+	args = appendLabName(args, labName)
+	args = append(args, "--timeout", timeout.String())
+	return e.runner.Run(ctx, e.clabBin, args...)
 }
 
-func (e *Engine) Destroy(ctx context.Context, topoPath string) (Result, error) {
-	return e.runner.Run(ctx, e.clabBin, "destroy", "-t", topoPath, "--cleanup")
+func (e *Engine) Destroy(ctx context.Context, topoPath, labName string) (Result, error) {
+	args := []string{"destroy", "-t", topoPath}
+	args = appendLabName(args, labName)
+	args = append(args, "--cleanup")
+	return e.runner.Run(ctx, e.clabBin, args...)
 }
 
-func (e *Engine) Redeploy(ctx context.Context, topoPath string, timeout time.Duration) (Result, error) {
-	return e.runner.Run(ctx, e.clabBin, "redeploy", "-t", topoPath, "--cleanup", "--timeout", timeout.String())
+func (e *Engine) Redeploy(ctx context.Context, topoPath, labName string, timeout time.Duration) (Result, error) {
+	args := []string{"redeploy", "-t", topoPath}
+	args = appendLabName(args, labName)
+	args = append(args, "--cleanup", "--timeout", timeout.String())
+	return e.runner.Run(ctx, e.clabBin, args...)
+}
+
+// appendLabName adds `--name <labName>` when a lab name is set, so the static
+// topology name is overridden and multiple instances cannot collide.
+func appendLabName(args []string, labName string) []string {
+	if labName == "" {
+		return args
+	}
+	return append(args, "--name", labName)
 }
 
 func (e *Engine) Exec(ctx context.Context, container, cmd string) (Result, error) {
@@ -54,8 +72,11 @@ func (e *Engine) CopyToContainer(ctx context.Context, src, container, dest strin
 }
 
 // Inspect returns a map from lab name to node list.
-func (e *Engine) Inspect(ctx context.Context, topoPath string) (map[string][]InspectNode, error) {
-	res, err := e.runner.Run(ctx, e.clabBin, "inspect", "-t", topoPath, "-f", "json")
+func (e *Engine) Inspect(ctx context.Context, topoPath, labName string) (map[string][]InspectNode, error) {
+	args := []string{"inspect", "-t", topoPath}
+	args = appendLabName(args, labName)
+	args = append(args, "-f", "json")
+	res, err := e.runner.Run(ctx, e.clabBin, args...)
 	if err != nil {
 		return nil, err
 	}

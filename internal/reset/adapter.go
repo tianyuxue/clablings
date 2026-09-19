@@ -20,7 +20,7 @@ func (a *engineAdapter) Redeploy(ctx context.Context, ch *content.Chapter) error
 	}
 	rctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
 	defer cancel()
-	res, err := a.e.Redeploy(rctx, ch.TopologyPath, engine.ChapterDeployTimeout(ch))
+	res, err := a.e.Redeploy(rctx, ch.TopologyPath, ch.LabName, engine.ChapterDeployTimeout(ch))
 	if err != nil {
 		return err
 	}

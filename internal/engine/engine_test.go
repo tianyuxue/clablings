@@ -32,10 +32,10 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (Result
 func TestEngineDeployCommand(t *testing.T) {
 	fr := &fakeRunner{}
 	e := NewWithRunner(fr, "containerlab", "docker")
-	if _, err := e.Deploy(context.Background(), "/tmp/topo.clab.yml", 2*time.Minute); err != nil {
+	if _, err := e.Deploy(context.Background(), "/tmp/topo.clab.yml", "lab-x", 2*time.Minute); err != nil {
 		t.Fatalf("Deploy: %v", err)
 	}
-	want := []string{"containerlab", "deploy", "-t", "/tmp/topo.clab.yml", "--timeout", "2m0s"}
+	want := []string{"containerlab", "deploy", "-t", "/tmp/topo.clab.yml", "--name", "lab-x", "--timeout", "2m0s"}
 	if !reflect.DeepEqual(fr.calls[0], want) {
 		t.Fatalf("calls[0] = %v, want %v", fr.calls[0], want)
 	}
@@ -44,16 +44,26 @@ func TestEngineDeployCommand(t *testing.T) {
 func TestEngineDestroyAndRedeployCommands(t *testing.T) {
 	fr := &fakeRunner{}
 	e := NewWithRunner(fr, "containerlab", "docker")
-	_, _ = e.Destroy(context.Background(), "/tmp/topo.clab.yml")
-	_, _ = e.Redeploy(context.Background(), "/tmp/topo.clab.yml", time.Minute)
+	_, _ = e.Destroy(context.Background(), "/tmp/topo.clab.yml", "lab-x")
+	_, _ = e.Redeploy(context.Background(), "/tmp/topo.clab.yml", "lab-x", time.Minute)
 
-	wantDestroy := []string{"containerlab", "destroy", "-t", "/tmp/topo.clab.yml", "--cleanup"}
+	wantDestroy := []string{"containerlab", "destroy", "-t", "/tmp/topo.clab.yml", "--name", "lab-x", "--cleanup"}
 	if !reflect.DeepEqual(fr.calls[0], wantDestroy) {
 		t.Fatalf("destroy = %v, want %v", fr.calls[0], wantDestroy)
 	}
-	wantRedeploy := []string{"containerlab", "redeploy", "-t", "/tmp/topo.clab.yml", "--cleanup", "--timeout", "1m0s"}
+	wantRedeploy := []string{"containerlab", "redeploy", "-t", "/tmp/topo.clab.yml", "--name", "lab-x", "--cleanup", "--timeout", "1m0s"}
 	if !reflect.DeepEqual(fr.calls[1], wantRedeploy) {
 		t.Fatalf("redeploy = %v, want %v", fr.calls[1], wantRedeploy)
+	}
+}
+
+func TestEngineEmptyLabNameOmitsNameFlag(t *testing.T) {
+	fr := &fakeRunner{}
+	e := NewWithRunner(fr, "containerlab", "docker")
+	_, _ = e.Deploy(context.Background(), "/t.yml", "", time.Minute)
+	want := []string{"containerlab", "deploy", "-t", "/t.yml", "--timeout", "1m0s"}
+	if !reflect.DeepEqual(fr.calls[0], want) {
+		t.Fatalf("calls[0] = %v, want %v", fr.calls[0], want)
 	}
 }
 
@@ -84,7 +94,7 @@ func TestEngineCommandsFailOnNonZeroCode(t *testing.T) {
 	}}
 	e := NewWithRunner(fr, "containerlab", "docker")
 
-	if _, err := e.Inspect(context.Background(), "/t.yml"); err == nil || !strings.Contains(err.Error(), "inspect boom") {
+	if _, err := e.Inspect(context.Background(), "/t.yml", ""); err == nil || !strings.Contains(err.Error(), "inspect boom") {
 		t.Fatalf("Inspect err = %v, want contains %q", err, "inspect boom")
 	}
 	if _, err := e.InspectInterfaces(context.Background(), "lab"); err == nil || !strings.Contains(err.Error(), "ifaces boom") {
@@ -99,7 +109,7 @@ func TestEnginePropagatesRunnerError(t *testing.T) {
 	sentinel := errors.New("start failed")
 	fr := &fakeRunner{results: []Result{{}}, errs: []error{sentinel}}
 	e := NewWithRunner(fr, "containerlab", "docker")
-	if _, err := e.Inspect(context.Background(), "/t.yml"); !errors.Is(err, sentinel) {
+	if _, err := e.Inspect(context.Background(), "/t.yml", ""); !errors.Is(err, sentinel) {
 		t.Fatalf("err = %v, want sentinel", err)
 	}
 }

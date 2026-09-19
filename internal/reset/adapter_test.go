@@ -44,6 +44,19 @@ func TestAdapterRedeployCommand(t *testing.T) {
 	}
 }
 
+func TestAdapterRedeployIncludesLabName(t *testing.T) {
+	fr := &fakeRunner{}
+	a := FromEngine(engine.NewWithRunner(fr, "containerlab", "docker"))
+	ch := &content.Chapter{ID: "c1", TopologyPath: "/t.clab.yml", LabName: "lab-x", Deploy: content.Deploy{Timeout: "1m"}}
+	if err := a.Redeploy(context.Background(), ch); err != nil {
+		t.Fatalf("Redeploy: %v", err)
+	}
+	want := []string{"containerlab", "redeploy", "-t", "/t.clab.yml", "--name", "lab-x", "--cleanup", "--timeout", "1m0s"}
+	if !reflect.DeepEqual(fr.calls[0], want) {
+		t.Fatalf("calls[0] = %v, want %v", fr.calls[0], want)
+	}
+}
+
 func TestAdapterRedeployNonZeroCode(t *testing.T) {
 	fr := &fakeRunner{results: []engine.Result{{Code: 1, Stderr: "redeploy boom"}}}
 	a := FromEngine(engine.NewWithRunner(fr, "containerlab", "docker"))

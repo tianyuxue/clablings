@@ -101,8 +101,13 @@ func ContainerName(lab, node string) string {
 
 // ContainerNameFor returns the containerlab container name for an exercise's node.
 func ContainerNameFor(ex *content.Exercise, node string) string {
-	if ex.ChapterRef != nil && ex.ChapterRef.TopologyName != "" {
-		return ContainerName(ex.ChapterRef.TopologyName, node)
+	if ex.ChapterRef != nil {
+		if ex.ChapterRef.LabName != "" {
+			return ContainerName(ex.ChapterRef.LabName, node)
+		}
+		if ex.ChapterRef.TopologyName != "" {
+			return ContainerName(ex.ChapterRef.TopologyName, node)
+		}
 	}
 	return node
 }
