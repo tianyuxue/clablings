@@ -37,8 +37,11 @@ type Options struct {
 	Engine  Engine
 	Reset   Resetter
 	Verify  Verifier
-	Report  Reporter
-	Status  func(string)
+	// Quiz answers an interactive quiz exercise. When nil, a quiz exercise
+	// cannot be completed and Session returns an error reaching it.
+	Quiz   func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error)
+	Report Reporter
+	Status func(string)
 }
 
 // Session orchestrates watch's lifecycle and advancement.
@@ -155,7 +158,16 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 	defer func() { s.busy = false }()
 
 	ex := s.current
-	results, err := s.opts.Verify(ctx, ex)
+	var results []assert.Result
+	var err error
+	if ex.Type == content.TypeQuiz {
+		if s.opts.Quiz == nil {
+			return fmt.Errorf("exercise %s is a quiz; interactive quizzes are not supported yet (use `clablings test --answers`)", ex.FullID())
+		}
+		results, err = s.opts.Quiz(ctx, ex)
+	} else {
+		results, err = s.opts.Verify(ctx, ex)
+	}
 	if err != nil {
 		return err
 	}
@@ -231,6 +243,9 @@ func (s *Session) activate(ctx context.Context, ex *content.Exercise) error {
 // setActiveAndReset records ex as the current exercise, persists state (without
 // downgrading an already-passed exercise), and runs the fast reset.
 func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) error {
+	if ex.Type == content.TypeQuiz && s.opts.Quiz == nil {
+		return fmt.Errorf("exercise %s is a quiz; interactive quizzes are not supported yet (use `clablings test --answers`)", ex.FullID())
+	}
 	s.current = ex
 	s.opts.State.SetCurrent(ex.FullID())
 	es := s.opts.State.Get(ex.FullID())

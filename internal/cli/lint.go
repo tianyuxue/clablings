@@ -56,40 +56,67 @@ func lintLibrary(root string) ([]string, error) {
 	}
 	var problems []string
 	for _, ch := range lib.Chapters {
+		var nodes map[string]bool
 		if ch.HasTopology() {
 			topo, err := engine.ParseTopology(ch.TopologyPath)
 			if err != nil {
 				return nil, err
 			}
-			nodes := map[string]bool{}
+			nodes = map[string]bool{}
 			for _, n := range topo.Nodes {
 				nodes[n.Name] = true
 			}
-			checkNode := func(exID string, idx int, kind, node string) {
-				if node == "" {
-					problems = append(problems, fmt.Sprintf("%s: %s %d requires a node", exID, kind, idx))
-					return
-				}
-				if !nodes[node] {
-					problems = append(problems, fmt.Sprintf("%s: %s %d references unknown node %q", exID, kind, idx, node))
-				}
+		}
+		checkNode := func(exID string, idx int, kind, node string) {
+			if node == "" {
+				problems = append(problems, fmt.Sprintf("%s: %s %d requires a node", exID, kind, idx))
+				return
 			}
-			for _, ex := range ch.Exercises {
-				for i, a := range ex.Assertions {
-					switch a.Type {
-					case "exec", "interface":
+			if !nodes[node] {
+				problems = append(problems, fmt.Sprintf("%s: %s %d references unknown node %q", exID, kind, idx, node))
+			}
+		}
+		for _, ex := range ch.Exercises {
+			for i, a := range ex.Assertions {
+				switch a.Type {
+				case "exec", "interface":
+					if ch.HasTopology() {
 						checkNode(ex.FullID(), i+1, "assertion", a.Node)
-					case "link":
+					} else {
+						problems = append(problems, fmt.Sprintf("%s: assertion %d requires a topology", ex.FullID(), i+1))
+					}
+				case "link":
+					if ch.HasTopology() {
 						checkNode(ex.FullID(), i+1, "link endpoint a", a.A)
 						checkNode(ex.FullID(), i+1, "link endpoint b", a.B)
-					case "file":
-						if a.Node != "" && !nodes[a.Node] {
-							problems = append(problems, fmt.Sprintf("%s: assertion %d references unknown node %q", ex.FullID(), i+1, a.Node))
-						}
-					default:
-						problems = append(problems, fmt.Sprintf("%s: assertion %d has unknown type %q", ex.FullID(), i+1, a.Type))
+					} else {
+						problems = append(problems, fmt.Sprintf("%s: assertion %d requires a topology", ex.FullID(), i+1))
+					}
+				case "file":
+					if !ch.HasTopology() && (a.Node != "" || a.Path != "") {
+						problems = append(problems, fmt.Sprintf("%s: assertion %d requires a topology", ex.FullID(), i+1))
+					} else if ch.HasTopology() && a.Node != "" && !nodes[a.Node] {
+						problems = append(problems, fmt.Sprintf("%s: assertion %d references unknown node %q", ex.FullID(), i+1, a.Node))
+					}
+				default:
+					problems = append(problems, fmt.Sprintf("%s: assertion %d has unknown type %q", ex.FullID(), i+1, a.Type))
+				}
+				if a.Wait != "" {
+					if d, err := time.ParseDuration(a.Wait); err != nil || d < 0 {
+						problems = append(problems, fmt.Sprintf("%s: assertion %d has invalid wait %q", ex.FullID(), i+1, a.Wait))
 					}
 				}
+			}
+			if !ch.HasTopology() {
+				if len(ex.Reload) > 0 || ex.Build != nil || ex.Run != nil {
+					problems = append(problems, fmt.Sprintf("%s: reload/build/run require a topology", ex.FullID()))
+				}
+				for _, f := range ex.Files {
+					if f.Node != "" || f.Dest != "" {
+						problems = append(problems, fmt.Sprintf("%s: file %q targets a node but the chapter has no topology", ex.FullID(), f.Source))
+					}
+				}
+			} else {
 				for _, f := range ex.Files {
 					if f.Node != "" && !nodes[f.Node] {
 						problems = append(problems, fmt.Sprintf("%s: file %q references unknown node %q", ex.FullID(), f.Source, f.Node))
@@ -102,31 +129,6 @@ func lintLibrary(root string) ([]string, error) {
 				}
 				if ex.Run != nil && ex.Run.Node != "" && !nodes[ex.Run.Node] {
 					problems = append(problems, fmt.Sprintf("%s: run references unknown node %q", ex.FullID(), ex.Run.Node))
-				}
-			}
-		} else {
-			for _, ex := range ch.Exercises {
-				for i, a := range ex.Assertions {
-					if a.Type == "exec" || a.Type == "interface" || a.Type == "link" || a.Node != "" || a.Path != "" {
-						problems = append(problems, fmt.Sprintf("%s: assertion %d requires a topology", ex.FullID(), i+1))
-					}
-				}
-				if len(ex.Reload) > 0 || ex.Build != nil || ex.Run != nil {
-					problems = append(problems, fmt.Sprintf("%s: reload/build/run require a topology", ex.FullID()))
-				}
-				for _, f := range ex.Files {
-					if f.Node != "" || f.Dest != "" {
-						problems = append(problems, fmt.Sprintf("%s: file %q targets a node but the chapter has no topology", ex.FullID(), f.Source))
-					}
-				}
-			}
-		}
-		for _, ex := range ch.Exercises {
-			for i, a := range ex.Assertions {
-				if a.Wait != "" {
-					if d, err := time.ParseDuration(a.Wait); err != nil || d < 0 {
-						problems = append(problems, fmt.Sprintf("%s: assertion %d has invalid wait %q", ex.FullID(), i+1, a.Wait))
-					}
 				}
 			}
 		}

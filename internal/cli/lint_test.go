@@ -196,6 +196,24 @@ func TestLintUnknownAssertionType(t *testing.T) {
 	}
 }
 
+func TestLintTopologylessUnknownAssertionType(t *testing.T) {
+	root := writeLintTree(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: {en: t, zh: t}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntitle: {en: t, zh: t}\ntype: config-fix\nassertions:\n  - name: {en: a, zh: a}\n    type: bogus\n",
+	})
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected lint failure for unknown assertion type without topology")
+	}
+	if !strings.Contains(out.String(), "unknown type") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
+
 func TestLintWaitZeroAllowed(t *testing.T) {
 	root := writeLintTree(t, map[string]string{
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",

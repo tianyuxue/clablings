@@ -49,7 +49,7 @@ func newTestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
 	cmd.Flags().BoolVar(&all, "all", false, "verify every exercise in the library")
 	cmd.Flags().StringVar(&format, "format", "text", "output format: text or json")
-	cmd.Flags().StringVar(&answersPath, "answers", "", "YAML answers file for quiz exercises")
+	cmd.Flags().StringVar(&answersPath, "answers", "", "YAML answers file for quiz exercises (option indices are 0-based)")
 	cmd.SilenceUsage = true
 	return cmd
 }

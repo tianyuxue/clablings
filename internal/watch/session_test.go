@@ -247,6 +247,45 @@ func TestSessionDelegatesLifecycleForTopologylessChapter(t *testing.T) {
 	}
 }
 
+func TestSessionQuizRequiresHandler(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	ch := lib.Chapters[0]
+	ch.Exercises[0].Type = content.TypeQuiz
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.Start(context.Background()); err == nil {
+		t.Fatal("expected error reaching a quiz without a handler")
+	}
+}
+
+func TestSessionUsesQuizHandler(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	ch := lib.Chapters[0]
+	ch.Exercises[0].Type = content.TypeQuiz
+	called := 0
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			called++
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := s.VerifyNow(context.Background()); err != nil {
+		t.Fatalf("VerifyNow: %v", err)
+	}
+	if called != 1 || s.Current() == nil || s.Current().ID != "e2" {
+		t.Fatalf("called=%d current=%v", called, s.Current())
+	}
+}
+
 func TestSessionEmptyLibrary(t *testing.T) {
 	lib := &content.Library{Root: t.TempDir(), ByID: map[string]*content.Exercise{}}
 	st, _ := state.Load(lib.Root)
