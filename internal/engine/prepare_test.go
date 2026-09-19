@@ -60,3 +60,23 @@ func TestPrepareTopologyEmptyLabNameUsesOriginal(t *testing.T) {
 		t.Fatalf("got=%q err=%v", got, err)
 	}
 }
+
+func TestDerivedTopologyPathIsPerInstance(t *testing.T) {
+	a := &content.Chapter{TopologyPath: "/x/topology.clab.yml", LabName: "inst-a"}
+	b := &content.Chapter{TopologyPath: "/x/topology.clab.yml", LabName: "inst-b"}
+	if DerivedTopologyPath(a) == DerivedTopologyPath(b) {
+		t.Fatalf("paths must differ: %q", DerivedTopologyPath(a))
+	}
+}
+
+func TestPrepareTopologyRejectsNonMapping(t *testing.T) {
+	dir := t.TempDir()
+	orig := filepath.Join(dir, "topology.clab.yml")
+	if err := os.WriteFile(orig, []byte("- a\n- b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ch := &content.Chapter{TopologyPath: orig, LabName: "x"}
+	if _, err := PrepareTopology(ch); err == nil {
+		t.Fatal("expected error for non-mapping topology")
+	}
+}

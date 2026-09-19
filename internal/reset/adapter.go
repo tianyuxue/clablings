@@ -18,12 +18,12 @@ func (a *engineAdapter) Redeploy(ctx context.Context, ch *content.Chapter) error
 	if err := engine.RunHostCommands(ctx, ch.Teardown); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: chapter %s teardown failed: %v\n", ch.ID, err)
 	}
-	rctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
-	defer cancel()
 	topo, err := engine.PrepareTopology(ch)
 	if err != nil {
-		return err
+		return fmt.Errorf("chapter %s: %w", ch.ID, err)
 	}
+	rctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
+	defer cancel()
 	res, err := a.e.Redeploy(rctx, topo, engine.ChapterDeployTimeout(ch))
 	if err != nil {
 		return err
