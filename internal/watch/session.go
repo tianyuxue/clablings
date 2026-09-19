@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -85,6 +86,9 @@ func (s *Session) ResetCurrent(ctx context.Context, hard bool) error {
 	if s.current == nil {
 		return nil
 	}
+	if s.busy {
+		return nil
+	}
 	mode := "fast"
 	if hard {
 		mode = "hard"
@@ -98,27 +102,31 @@ func (s *Session) ResetCurrent(ctx context.Context, hard bool) error {
 		err = s.opts.Reset.Fast(ctx, s.current)
 	}
 	if err != nil {
-		return err
+		s.status("✗ reset exercise %s failed (%s)", s.current.FullID(), time.Since(start).Round(time.Millisecond))
+		return fmt.Errorf("reset exercise %s: %w", s.current.FullID(), err)
 	}
 	s.status("✓ reset complete (%s)", time.Since(start).Round(time.Millisecond))
 	return nil
 }
 
-// Cleanup destroys every chapter in the library (idempotent).
+// Cleanup destroys every chapter in the library (best-effort, idempotent).
 func (s *Session) Cleanup(ctx context.Context) error {
+	var errs []error
 	for _, ch := range s.opts.Library.Chapters {
 		if err := s.destroyChapter(ctx, ch); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	s.chapter = nil
+	return errors.Join(errs...)
 }
 
 func (s *Session) deployChapter(ctx context.Context, ch *content.Chapter) error {
 	start := time.Now()
 	s.status("→ deploying chapter %s ...", ch.ID)
 	if err := s.opts.Engine.Deploy(ctx, ch); err != nil {
-		return err
+		s.status("✗ deploying chapter %s failed (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
+		return fmt.Errorf("deploy chapter %s: %w", ch.ID, err)
 	}
 	s.status("✓ chapter %s ready (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
 	return nil
@@ -128,7 +136,8 @@ func (s *Session) destroyChapter(ctx context.Context, ch *content.Chapter) error
 	start := time.Now()
 	s.status("→ destroying chapter %s ...", ch.ID)
 	if err := s.opts.Engine.Destroy(ctx, ch); err != nil {
-		return err
+		s.status("✗ destroying chapter %s failed (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
+		return fmt.Errorf("destroy chapter %s: %w", ch.ID, err)
 	}
 	s.status("✓ chapter %s destroyed (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
 	return nil

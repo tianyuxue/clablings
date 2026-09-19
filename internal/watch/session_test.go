@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -294,5 +295,66 @@ func TestSessionStatusResetAndCleanup(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("status missing %q:\n%s", want, joined)
 		}
+	}
+}
+
+func TestSessionResetCurrentFast(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: fe, Reset: fr,
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetCurrent(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if len(fr.fast) != 2 || fr.fast[1] != "c1/e1" {
+		t.Fatalf("fast = %v", fr.fast)
+	}
+}
+
+func TestSessionResetCurrentNil(t *testing.T) {
+	lib := &content.Library{Root: t.TempDir(), ByID: map[string]*content.Exercise{}}
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.ResetCurrent(context.Background(), true); err != nil {
+		t.Fatalf("nil current: %v", err)
+	}
+}
+
+type partialFailEngine struct {
+	fakeEngine
+	failOn string
+}
+
+func (p *partialFailEngine) Destroy(_ context.Context, ch *content.Chapter) error {
+	p.destroyed = append(p.destroyed, ch.ID)
+	if ch.ID == p.failOn {
+		return errors.New("boom")
+	}
+	return nil
+}
+
+func TestSessionCleanupBestEffort(t *testing.T) {
+	fe := &partialFailEngine{failOn: "c1"}
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: fe, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	err := s.Cleanup(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "c1") {
+		t.Fatalf("err = %v, want chapter c1 failure", err)
+	}
+	if len(fe.destroyed) != 2 {
+		t.Fatalf("destroyed = %v, want both chapters attempted", fe.destroyed)
 	}
 }
