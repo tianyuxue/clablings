@@ -12,7 +12,9 @@ import (
 // when set, otherwise the first 8 hex chars of sha1(abs(root)).
 func InstanceID(root string) string {
 	if v := strings.TrimSpace(os.Getenv("CLABLINGS_INSTANCE")); v != "" {
-		return sanitizeName(v)
+		if id := sanitizeName(v); id != "" {
+			return id
+		}
 	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -29,10 +31,14 @@ func LabName(root, instance, topologyName string) string {
 	if base == "" {
 		base = "clablings"
 	}
-	return base + "-" + instance + "-" + sanitizeName(topologyName)
+	id := sanitizeName(instance)
+	if id == "" {
+		id = "0"
+	}
+	return base + "-" + id + "-" + sanitizeName(topologyName)
 }
 
-// sanitizeName lowercases and keeps [a-z0-9-], collapsing every other run of
+// sanitizeName lowercases and keeps [a-z0-9], collapsing every other run of
 // characters into a single '-' and trimming leading/trailing '-'.
 func sanitizeName(s string) string {
 	var b strings.Builder

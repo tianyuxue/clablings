@@ -44,6 +44,9 @@ func TestLoadLibrary(t *testing.T) {
 	if ex.Type != TypeConfigFix {
 		t.Fatalf("type = %q", ex.Type)
 	}
+	if len(ex.Hints) != 1 || ex.Hints[0] != "check the MTU" {
+		t.Fatalf("hints = %v", ex.Hints)
+	}
 	if len(ex.Files) != 1 || ex.Files[0].Source != "frr1/frr.conf" || ex.Files[0].Node != "r1" {
 		t.Fatalf("files = %+v", ex.Files)
 	}

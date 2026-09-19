@@ -9,6 +9,8 @@ files:
 reload:
   - node: r1
     cmd: "vtysh -c 'clear ip ospf process'"
+hints:
+  - check the MTU
 assertions:
   - name: OSPF 邻居达到 Full
     type: exec

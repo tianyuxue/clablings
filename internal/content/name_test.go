@@ -25,6 +25,21 @@ func TestInstanceIDFromRootHash(t *testing.T) {
 	}
 }
 
+func TestInstanceIDFromEnvAllInvalid(t *testing.T) {
+	t.Setenv("CLABLINGS_INSTANCE", "!!!")
+	got := InstanceID("/a")
+	if len(got) != 8 {
+		t.Fatalf("InstanceID = %q, want 8-char root hash", got)
+	}
+}
+
+func TestLabNameSanitizesInstance(t *testing.T) {
+	got := LabName("/root", "!!!", "x")
+	if got != "root-0-x" {
+		t.Fatalf("LabName = %q, want root-0-x", got)
+	}
+}
+
 func TestLabNameSanitizes(t *testing.T) {
 	got := LabName("/home/me/My Labs/", "abcd1234", "Clablings OSPF")
 	want := "my-labs-abcd1234-clablings-ospf"
