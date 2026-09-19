@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/state"
@@ -73,7 +75,7 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 	}
 	if concept := readConceptFile(ch.Dir, loc); concept == "" {
 		fmt.Fprintln(w, "(no concept document)")
-	} else {
+	} else if err := renderMarkdown(w, concept); err != nil {
 		fmt.Fprint(w, concept)
 		if !strings.HasSuffix(concept, "\n") {
 			fmt.Fprintln(w)
@@ -111,6 +113,32 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 		}
 	}
 	return nil
+}
+
+// renderMarkdown renders Markdown for a terminal: styled when stdout is a TTY,
+// raw Markdown otherwise (pipes/CI). Width follows the terminal, defaulting to 80.
+func renderMarkdown(w io.Writer, md string) error {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		_, err := io.WriteString(w, md)
+		return err
+	}
+	width := 80
+	if cols, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && cols > 0 {
+		width = cols
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return err
+	}
+	out, err := r.Render(md)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, out)
+	return err
 }
 
 // readConceptFile returns concept.<locale>.md with fallback to the default
