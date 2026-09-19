@@ -226,10 +226,10 @@ func TestSessionCompletionClearsCurrent(t *testing.T) {
 	}
 }
 
-func TestSessionQuizChapterSkipsDeploy(t *testing.T) {
+func TestSessionDelegatesLifecycleForTopologylessChapter(t *testing.T) {
 	fe := &fakeEngine{}
 	fr := &fakeReset{}
-	ch := &content.Chapter{ID: "c1"}
+	ch := &content.Chapter{ID: "c1"} // no topology
 	ex := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeConfigFix, ChapterRef: ch}
 	ch.Exercises = []*content.Exercise{ex}
 	lib := &content.Library{
@@ -242,8 +242,8 @@ func TestSessionQuizChapterSkipsDeploy(t *testing.T) {
 	if err := s.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if len(fe.deployed) != 0 || len(fe.destroyed) != 0 {
-		t.Fatalf("deployed=%v destroyed=%v, want none", fe.deployed, fe.destroyed)
+	if len(fe.deployed) != 1 || fe.deployed[0] != "c1" {
+		t.Fatalf("deployed = %v, want [c1]", fe.deployed)
 	}
 }
 

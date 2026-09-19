@@ -122,9 +122,6 @@ func (s *Session) Cleanup(ctx context.Context) error {
 }
 
 func (s *Session) deployChapter(ctx context.Context, ch *content.Chapter) error {
-	if !ch.HasTopology() {
-		return nil
-	}
 	start := time.Now()
 	s.status("→ deploying chapter %s ...", ch.ID)
 	if err := s.opts.Engine.Deploy(ctx, ch); err != nil {
@@ -136,9 +133,6 @@ func (s *Session) deployChapter(ctx context.Context, ch *content.Chapter) error 
 }
 
 func (s *Session) destroyChapter(ctx context.Context, ch *content.Chapter) error {
-	if !ch.HasTopology() {
-		return nil
-	}
 	start := time.Now()
 	s.status("→ destroying chapter %s ...", ch.ID)
 	if err := s.opts.Engine.Destroy(ctx, ch); err != nil {

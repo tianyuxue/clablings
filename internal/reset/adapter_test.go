@@ -112,6 +112,18 @@ func TestAdapterRedeployNoTopologyRunsSetup(t *testing.T) {
 	}
 }
 
+func TestAdapterRedeployNoTopologyRunsTeardown(t *testing.T) {
+	fr := &fakeRunner{}
+	a := FromEngine(engine.NewWithRunner(fr, "containerlab", "docker"))
+	ch := &content.Chapter{ID: "c1", Teardown: []string{"exit 1"}}
+	if err := a.Redeploy(context.Background(), ch); err != nil {
+		t.Fatalf("teardown failure must not abort: %v", err)
+	}
+	if len(fr.calls) != 0 {
+		t.Fatalf("engine calls = %v, want none", fr.calls)
+	}
+}
+
 func TestAdapterExecNonZeroCode(t *testing.T) {
 	fr := &fakeRunner{results: []engine.Result{{Code: 2, Stderr: "exec boom"}}}
 	a := FromEngine(engine.NewWithRunner(fr, "containerlab", "docker"))

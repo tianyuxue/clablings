@@ -52,11 +52,11 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 	if err := engine.RunHostCommands(ctx, ch.Teardown); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: chapter %s teardown failed: %v\n", ch.ID, err)
 	}
-	dctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
-	defer cancel()
 	if !ch.HasTopology() {
 		return nil
 	}
+	dctx, cancel := context.WithTimeout(ctx, engine.ChapterDeployTimeout(ch))
+	defer cancel()
 	topo, err := engine.PrepareTopology(ch)
 	if err != nil {
 		return fmt.Errorf("chapter %s: %w", ch.ID, err)
