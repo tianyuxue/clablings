@@ -39,6 +39,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
 		for {
+			watch.WriteLegend(out)
 			fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
 			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
 			for oi := range q.Options {
