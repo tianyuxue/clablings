@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/styles"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -108,7 +109,7 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 				fmt.Fprintf(w, "  Question: %s\n", r.Question)
 			}
 			if r.URL != "" {
-				fmt.Fprintf(w, "  %s\n", r.URL)
+				fmt.Fprintf(w, "  %s\n", hyperlink(r.URL))
 			}
 		}
 	}
@@ -126,8 +127,11 @@ func renderMarkdown(w io.Writer, md string) error {
 	if cols, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && cols > 0 {
 		width = cols
 	}
+	st := styles.DraculaStyleConfig
+	st.H1.Prefix, st.H2.Prefix, st.H3.Prefix = "", "", ""
+	st.H4.Prefix, st.H5.Prefix, st.H6.Prefix = "", "", ""
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("dark"),
+		glamour.WithStyles(st),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
@@ -139,6 +143,15 @@ func renderMarkdown(w io.Writer, md string) error {
 	}
 	_, err = io.WriteString(w, out)
 	return err
+}
+
+// hyperlink wraps url in an OSC 8 hyperlink on a terminal, so it is clickable;
+// elsewhere it returns the bare URL.
+func hyperlink(url string) string {
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		return "\x1b]8;;" + url + "\x1b\\" + url + "\x1b]8;;\x1b\\"
+	}
+	return url
 }
 
 // readConceptFile returns concept.<locale>.md with fallback to the default
