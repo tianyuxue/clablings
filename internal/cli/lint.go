@@ -65,11 +65,41 @@ func lintLibrary(root string) ([]string, error) {
 			for _, n := range topo.Nodes {
 				nodes[n.Name] = true
 			}
+			checkNode := func(exID string, idx int, kind, node string) {
+				if node == "" {
+					problems = append(problems, fmt.Sprintf("%s: %s %d requires a node", exID, kind, idx))
+					return
+				}
+				if !nodes[node] {
+					problems = append(problems, fmt.Sprintf("%s: %s %d references unknown node %q", exID, kind, idx, node))
+				}
+			}
 			for _, ex := range ch.Exercises {
 				for i, a := range ex.Assertions {
-					if a.Node != "" && !nodes[a.Node] {
-						problems = append(problems, fmt.Sprintf("%s: assertion %d references unknown node %q", ex.FullID(), i+1, a.Node))
+					switch a.Type {
+					case "exec", "interface":
+						checkNode(ex.FullID(), i+1, "assertion", a.Node)
+					case "link":
+						checkNode(ex.FullID(), i+1, "assertion", a.A)
+						checkNode(ex.FullID(), i+1, "assertion", a.B)
+					case "file":
+						if a.Node != "" && !nodes[a.Node] {
+							problems = append(problems, fmt.Sprintf("%s: assertion %d references unknown node %q", ex.FullID(), i+1, a.Node))
+						}
 					}
+				}
+				for _, f := range ex.Files {
+					if f.Node != "" && !nodes[f.Node] {
+						problems = append(problems, fmt.Sprintf("%s: file %q references unknown node %q", ex.FullID(), f.Source, f.Node))
+					}
+				}
+				for _, r := range ex.Reload {
+					if r.Node != "" && !nodes[r.Node] {
+						problems = append(problems, fmt.Sprintf("%s: reload references unknown node %q", ex.FullID(), r.Node))
+					}
+				}
+				if ex.Run != nil && ex.Run.Node != "" && !nodes[ex.Run.Node] {
+					problems = append(problems, fmt.Sprintf("%s: run references unknown node %q", ex.FullID(), ex.Run.Node))
 				}
 			}
 		} else {
@@ -92,7 +122,7 @@ func lintLibrary(root string) ([]string, error) {
 		for _, ex := range ch.Exercises {
 			for i, a := range ex.Assertions {
 				if a.Wait != "" {
-					if d, err := time.ParseDuration(a.Wait); err != nil || d <= 0 {
+					if d, err := time.ParseDuration(a.Wait); err != nil || d < 0 {
 						problems = append(problems, fmt.Sprintf("%s: assertion %d has invalid wait %q", ex.FullID(), i+1, a.Wait))
 					}
 				}

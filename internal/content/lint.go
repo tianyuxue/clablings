@@ -1,6 +1,7 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,14 @@ import (
 )
 
 func (l localizedString) has(locale string) bool { return l.Values[locale] != "" }
+
+// missingText reports a field that lacks locale but was authored in some locale.
+func missingText(l localizedString, locale string) bool {
+	if l.has(locale) {
+		return false
+	}
+	return len(l.Values) > 0
+}
 
 func hasLocaleList(in map[string][]string, locale string) bool {
 	for k, v := range in {
@@ -32,16 +41,19 @@ func MissingTranslations(root, locale string) ([]string, error) {
 		if err := decodeYAML(filepath.Join(chDir, "chapter.yaml"), &ch); err != nil {
 			return nil, err
 		}
-		if !ch.Title.has(locale) {
+		if missingText(ch.Title, locale) {
 			problems = append(problems, fmt.Sprintf("chapter %s: title missing %s", ch.ID, locale))
 		}
-		if !hasLocaleList(ch.Objectives, locale) {
+		if len(ch.Objectives) > 0 && !hasLocaleList(ch.Objectives, locale) {
 			problems = append(problems, fmt.Sprintf("chapter %s: objectives missing %s", ch.ID, locale))
 		}
 		exDir := filepath.Join(chDir, "exercises")
 		entries, err := os.ReadDir(exDir)
 		if err != nil {
-			continue
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, fmt.Errorf("read exercises dir %s: %w", exDir, err)
 		}
 		var names []string
 		for _, e := range entries {
@@ -56,29 +68,32 @@ func MissingTranslations(root, locale string) ([]string, error) {
 				return nil, err
 			}
 			full := ch.ID + "/" + ex.ID
-			if !ex.Title.has(locale) {
+			if missingText(ex.Title, locale) {
 				problems = append(problems, fmt.Sprintf("exercise %s: title missing %s", full, locale))
 			}
 			for i, h := range ex.Hints {
-				if !h.has(locale) {
+				if missingText(h, locale) {
 					problems = append(problems, fmt.Sprintf("exercise %s: hint %d missing %s", full, i+1, locale))
 				}
 			}
 			for i, a := range ex.Assertions {
-				if !a.Name.has(locale) {
+				if missingText(a.Name, locale) {
 					problems = append(problems, fmt.Sprintf("exercise %s: assertion %d name missing %s", full, i+1, locale))
 				}
-				if !a.Hint.has(locale) {
+				if missingText(a.Hint, locale) {
 					problems = append(problems, fmt.Sprintf("exercise %s: assertion %d hint missing %s", full, i+1, locale))
 				}
 			}
 			for qi, q := range ex.Questions {
-				if !q.Prompt.has(locale) {
+				if missingText(q.Prompt, locale) {
 					problems = append(problems, fmt.Sprintf("exercise %s: question %d prompt missing %s", full, qi+1, locale))
 				}
 				for oi, o := range q.Options {
-					if !o.Text.has(locale) {
+					if missingText(o.Text, locale) {
 						problems = append(problems, fmt.Sprintf("exercise %s: question %d option %d text missing %s", full, qi+1, oi+1, locale))
+					}
+					if missingText(o.Explanation, locale) {
+						problems = append(problems, fmt.Sprintf("exercise %s: question %d option %d explanation missing %s", full, qi+1, oi+1, locale))
 					}
 				}
 			}
