@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/tianyuxue/clablings/internal/assert"
@@ -254,5 +255,44 @@ func TestSessionBusyGuard(t *testing.T) {
 	}
 	if err := s.VerifyNow(context.Background()); err != nil {
 		t.Fatalf("VerifyNow: %v", err)
+	}
+}
+
+func TestSessionStatusResetAndCleanup(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	var statuses []string
+	s := New(Options{
+		Library: lib, State: st, Engine: fe, Reset: fr,
+		Status: func(m string) { statuses = append(statuses, m) },
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := s.ResetCurrent(context.Background(), true); err != nil {
+		t.Fatalf("ResetCurrent: %v", err)
+	}
+	if len(fr.hard) != 1 || fr.hard[0] != "c1/e1" {
+		t.Fatalf("hard = %v", fr.hard)
+	}
+	if err := s.Cleanup(context.Background()); err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if len(fe.destroyed) != 2 {
+		t.Fatalf("destroyed = %v", fe.destroyed)
+	}
+	joined := strings.Join(statuses, "\n")
+	for _, want := range []string{
+		"deploying chapter c1", "chapter c1 ready",
+		"resetting exercise c1/e1 (hard)", "reset complete",
+		"destroying chapter c1", "destroying chapter c2",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("status missing %q:\n%s", want, joined)
+		}
 	}
 }

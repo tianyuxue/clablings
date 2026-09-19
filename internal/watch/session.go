@@ -3,6 +3,7 @@ package watch
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/tianyuxue/clablings/internal/assert"
 	"github.com/tianyuxue/clablings/internal/content"
@@ -36,6 +37,7 @@ type Options struct {
 	Reset   Resetter
 	Verify  Verifier
 	Report  Reporter
+	Status  func(string)
 }
 
 // Session orchestrates watch's lifecycle and advancement.
@@ -69,6 +71,67 @@ func (s *Session) Run(ctx context.Context, id string) error {
 		return err
 	}
 	return s.activate(ctx, ex)
+}
+
+func (s *Session) status(format string, args ...any) {
+	if s.opts.Status != nil {
+		s.opts.Status(fmt.Sprintf(format, args...))
+	}
+}
+
+// ResetCurrent re-arms the current exercise via fast or hard reset. It does not
+// change progress state.
+func (s *Session) ResetCurrent(ctx context.Context, hard bool) error {
+	if s.current == nil {
+		return nil
+	}
+	mode := "fast"
+	if hard {
+		mode = "hard"
+	}
+	start := time.Now()
+	s.status("→ resetting exercise %s (%s) ...", s.current.FullID(), mode)
+	var err error
+	if hard {
+		err = s.opts.Reset.Hard(ctx, s.current)
+	} else {
+		err = s.opts.Reset.Fast(ctx, s.current)
+	}
+	if err != nil {
+		return err
+	}
+	s.status("✓ reset complete (%s)", time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+// Cleanup destroys every chapter in the library (idempotent).
+func (s *Session) Cleanup(ctx context.Context) error {
+	for _, ch := range s.opts.Library.Chapters {
+		if err := s.destroyChapter(ctx, ch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Session) deployChapter(ctx context.Context, ch *content.Chapter) error {
+	start := time.Now()
+	s.status("→ deploying chapter %s ...", ch.ID)
+	if err := s.opts.Engine.Deploy(ctx, ch); err != nil {
+		return err
+	}
+	s.status("✓ chapter %s ready (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+func (s *Session) destroyChapter(ctx context.Context, ch *content.Chapter) error {
+	start := time.Now()
+	s.status("→ destroying chapter %s ...", ch.ID)
+	if err := s.opts.Engine.Destroy(ctx, ch); err != nil {
+		return err
+	}
+	s.status("✓ chapter %s destroyed (%s)", ch.ID, time.Since(start).Round(time.Millisecond))
+	return nil
 }
 
 // VerifyNow runs one verification; on pass it advances to the next exercise.
@@ -143,12 +206,12 @@ func (s *Session) next(ex *content.Exercise) *content.Exercise {
 func (s *Session) activate(ctx context.Context, ex *content.Exercise) error {
 	if s.chapter == nil || s.chapter.ID != ex.ChapterRef.ID {
 		if s.chapter != nil {
-			if err := s.opts.Engine.Destroy(ctx, s.chapter); err != nil {
+			if err := s.destroyChapter(ctx, s.chapter); err != nil {
 				return err
 			}
 			s.chapter = nil
 		}
-		if err := s.opts.Engine.Deploy(ctx, ex.ChapterRef); err != nil {
+		if err := s.deployChapter(ctx, ex.ChapterRef); err != nil {
 			return err
 		}
 	}
@@ -178,12 +241,12 @@ func (s *Session) advance(ctx context.Context, from, next *content.Exercise) err
 	}
 	// Cross chapter: destroy the current chapter (if any), then deploy the next.
 	if s.chapter != nil {
-		if err := s.opts.Engine.Destroy(ctx, s.chapter); err != nil {
+		if err := s.destroyChapter(ctx, s.chapter); err != nil {
 			return err
 		}
 		s.chapter = nil
 	}
-	if err := s.opts.Engine.Deploy(ctx, next.ChapterRef); err != nil {
+	if err := s.deployChapter(ctx, next.ChapterRef); err != nil {
 		return err
 	}
 	s.chapter = next.ChapterRef
