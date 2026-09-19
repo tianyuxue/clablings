@@ -54,7 +54,7 @@ install: build
 	@echo "installed $(BINDIR)/$(BINARY)"
 
 uninstall:
-	@test -n "$(BINARY)" || { echo "BINARY is empty" >&2; exit 1; }
+	$(if $(BINARY),,$(error BINARY is empty))
 	rm -f $(BINDIR)/$(BINARY)
 	@echo "removed $(BINDIR)/$(BINARY)"
 
