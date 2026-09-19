@@ -17,6 +17,20 @@ The exercise library lives at the repository root `clab-exercises/`; see
 `clab-exercises/README.md` for usage. The design document is at
 `docs/superpowers/specs/2026-09-17-clablings-design.md`.
 
+## Watch keys
+
+- `Enter` verify the current exercise
+- `h` show hints
+- `c` show the chapter's concept and RFC reading slices
+- `r` / `f` hard / fast reset
+- `q` quit (keep containers)
+- `x` quit and destroy containers
+- `Ctrl+C` quit
+
+On `quiz` exercises, watch automatically prompts you to answer: enter option
+numbers (comma-separated for multi-select); wrong answers show explanations and
+re-prompt until correct, then advance.
+
 ## Configuration
 
 Optional config file `~/.config/clablings/config.yaml`:
