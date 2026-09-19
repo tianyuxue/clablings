@@ -320,3 +320,53 @@ func TestWatchLoopConceptKey(t *testing.T) {
 		t.Fatalf("concept not shown:\n%s", out.String())
 	}
 }
+
+func TestVerifyAndReloadQuizAborted(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, watch.ErrQuizAborted
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	next, done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
+	if err != nil {
+		t.Fatalf("verifyAndReload: %v", err)
+	}
+	if !done || next != nil {
+		t.Fatalf("done=%v next=%v", done, next)
+	}
+	if !strings.Contains(out.String(), "quiz aborted") {
+		t.Fatalf("out = %q, want aborted notice", out.String())
+	}
+}
+
+func TestWatchLoopQuizNotCompletedGuard(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: false}}, nil
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	tick := make(chan time.Time)
+	var out bytes.Buffer
+	err := watchLoop(context.Background(), sess, lib, cfg, "en", nil, tick, &out, &out)
+	if err == nil || !strings.Contains(err.Error(), "was not completed") {
+		t.Fatalf("err = %v, want not-completed guard", err)
+	}
+}

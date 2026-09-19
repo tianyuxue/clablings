@@ -85,10 +85,10 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	var byteCh chan byte
 	var quizHandler func(context.Context, *content.Exercise) ([]assert.Result, error)
 	if rawActive {
-		byteCh = make(chan byte, 64)
+		byteCh = make(chan byte, 256)
 		go watch.ReadBytes(os.Stdin, byteCh)
 		quizHandler = func(qctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
-			return nil, fmt.Errorf("%w: exercise %s", watch.ErrQuizUnsupported, ex.FullID())
+			return nil, fmt.Errorf("%w: exercise %s (use `clablings test --answers`)", watch.ErrQuizUnsupported, ex.FullID())
 		}
 	}
 
@@ -133,6 +133,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 	}
 	for {
 		if cur := sess.Current(); cur != nil && cur.Type == content.TypeQuiz {
+			if ctx.Err() != nil {
+				return handleQuit(ctx, sess, false, out, errOut)
+			}
 			next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 			if err != nil {
 				return err
@@ -143,6 +146,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			if next != nil {
 				w = next
 			}
+			if sess.Current() == cur {
+				return fmt.Errorf("quiz %s was not completed", cur.FullID())
+			}
 			if interactive {
 				watch.WriteLegend(out)
 			}
@@ -151,7 +157,11 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		select {
 		case <-ctx.Done():
 			return handleQuit(ctx, sess, false, out, errOut)
-		case b := <-byteCh:
+		case b, alive := <-byteCh:
+			if !alive {
+				byteCh = nil
+				continue
+			}
 			k, ok := watch.KeyFor(b)
 			if !ok {
 				continue
@@ -180,10 +190,11 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 					watch.WriteLegend(out)
 				}
 			case watch.KeyConcept:
-				if cur := sess.Current(); cur != nil && cur.ChapterRef != nil {
-					if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
-						fmt.Fprintf(errOut, "read error: %v\n", err)
-					}
+				cur := sess.Current()
+				if cur == nil || cur.ChapterRef == nil {
+					fmt.Fprintln(out, "no concept for this exercise")
+				} else if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
+					fmt.Fprintf(errOut, "read error: %v\n", err)
 				}
 				if interactive {
 					watch.WriteLegend(out)
@@ -262,9 +273,12 @@ func handleQuit(ctx context.Context, sess *watch.Session, clean bool, out, errOu
 func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 	for {
 		select {
-		case b := <-ch:
-			k, ok := watch.KeyFor(b)
+		case b, ok := <-ch:
 			if !ok {
+				return
+			}
+			k, mapped := watch.KeyFor(b)
+			if !mapped {
 				continue
 			}
 			switch k {
@@ -286,6 +300,7 @@ func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
 	if err := sess.VerifyNow(ctx); err != nil {
 		if errors.Is(err, watch.ErrQuizAborted) {
+			fmt.Fprintln(out, "quiz aborted")
 			return nil, true, nil
 		}
 		if errors.Is(err, watch.ErrQuizUnsupported) {
