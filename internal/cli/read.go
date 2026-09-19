@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
@@ -83,12 +82,15 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 		}
 		b.WriteByte('\n')
 	}
+	if err := renderMarkdown(w, b.String()); err != nil {
+		return err
+	}
 	readings, err := content.LoadReading(ch.Dir, loc)
 	if err != nil {
 		return err
 	}
 	if len(readings) > 0 {
-		b.WriteString("## Reading\n\n")
+		fmt.Fprintln(w, "Reading:")
 		for _, r := range readings {
 			kind := ""
 			if r.Kind != "" {
@@ -102,20 +104,28 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 			if r.RFC > 0 {
 				label = fmt.Sprintf("RFC %d%s %s", r.RFC, section, r.Title)
 			}
-			if r.URL != "" {
-				fmt.Fprintf(&b, "- [%s](%s)%s\n", label, r.URL, kind)
-			} else {
-				fmt.Fprintf(&b, "- %s%s\n", label, kind)
-			}
+			fmt.Fprintf(w, "  - %s%s\n", hyperlink(label, r.URL), kind)
 			if r.Intro != "" {
-				fmt.Fprintf(&b, "  - Intro: %s\n", r.Intro)
+				fmt.Fprintf(w, "      Intro: %s\n", r.Intro)
 			}
 			if r.Question != "" {
-				fmt.Fprintf(&b, "  - Question: %s\n", r.Question)
+				fmt.Fprintf(w, "      Question: %s\n", r.Question)
 			}
 		}
 	}
-	return renderMarkdown(w, b.String())
+	return nil
+}
+
+// hyperlink renders text as an OSC 8 hyperlink to url on a terminal (clickable);
+// on a non-terminal it appends the bare URL for copy/paste.
+func hyperlink(text, url string) string {
+	if url == "" {
+		return text
+	}
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+	}
+	return text + " " + url
 }
 
 // stripLeadingHeading drops a leading `# ...` title line from a concept body,
@@ -157,15 +167,8 @@ func renderMarkdown(w io.Writer, md string) error {
 	if err != nil {
 		return err
 	}
-	_, err = io.WriteString(w, linkify(out))
+	_, err = io.WriteString(w, out)
 	return err
-}
-
-var urlRe = regexp.MustCompile(`https?://[^\s)\]]+`)
-
-// linkify wraps bare URLs in OSC 8 hyperlinks so terminal output is clickable.
-func linkify(s string) string {
-	return urlRe.ReplaceAllString(s, "\x1b]8;;$0\x1b\\$0\x1b]8;;\x1b\\")
 }
 
 // readConceptFile returns concept.<locale>.md with fallback to the default
