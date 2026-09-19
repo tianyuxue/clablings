@@ -370,3 +370,32 @@ func TestWatchLoopQuizNotCompletedGuard(t *testing.T) {
 		t.Fatalf("err = %v, want not-completed guard", err)
 	}
 }
+
+func TestVerifyAndReloadQuizCanceledQuits(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(qctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			cancel()
+			return nil, qctx.Err()
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	var out bytes.Buffer
+	done, finished, err := func() (bool, bool, error) {
+		n, d, e := verifyAndReload(ctx, sess, lib, cfg, &out, &out)
+		return n != nil, d, e
+	}()
+	if err != nil || !finished || done {
+		t.Fatalf("done=%v finished=%v err=%v out=%q", done, finished, err, out.String())
+	}
+	if !strings.Contains(out.String(), "quiz aborted") {
+		t.Fatalf("out = %q, want aborted notice", out.String())
+	}
+}

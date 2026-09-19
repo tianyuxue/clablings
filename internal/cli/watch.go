@@ -146,7 +146,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			if next != nil {
 				w = next
 			}
-			if sess.Current() == cur {
+			if sess.Current() == cur && ctx.Err() == nil {
 				return fmt.Errorf("quiz %s was not completed", cur.FullID())
 			}
 			if interactive {
@@ -300,6 +300,10 @@ func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
 	if err := sess.VerifyNow(ctx); err != nil {
 		if errors.Is(err, watch.ErrQuizAborted) {
+			fmt.Fprintln(out, "quiz aborted")
+			return nil, true, nil
+		}
+		if errors.Is(err, context.Canceled) {
 			fmt.Fprintln(out, "quiz aborted")
 			return nil, true, nil
 		}
