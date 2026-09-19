@@ -2,6 +2,7 @@ package content
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -71,18 +72,33 @@ func resolveStrings(in []localizedString, locale string) []string {
 }
 
 // resolveLocalizedList picks the requested locale from a locale->[]string map,
-// falling back to the default language. Returns nil when nothing matches.
+// falling back to the default language. Lookups are deterministic: raw keys are
+// normalized, and ties are broken by sorted key order.
 func resolveLocalizedList(in map[string][]string, locale string) []string {
 	if len(in) == 0 {
 		return nil
 	}
-	if v := in[locale]; len(v) > 0 {
+	locale = NormalizeLocale(locale)
+	if v, ok := in[locale]; ok && len(v) > 0 {
 		return v
 	}
-	for k, v := range in {
-		if NormalizeLocale(k) == locale && len(v) > 0 {
-			return v
+	keys := make([]string, 0, len(in))
+	for k := range in {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if NormalizeLocale(k) == locale && len(in[k]) > 0 {
+			return in[k]
 		}
 	}
-	return in[DefaultLocale]
+	if v, ok := in[DefaultLocale]; ok && len(v) > 0 {
+		return v
+	}
+	for _, k := range keys {
+		if NormalizeLocale(k) == DefaultLocale && len(in[k]) > 0 {
+			return in[k]
+		}
+	}
+	return nil
 }

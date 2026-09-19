@@ -10,6 +10,7 @@ func TestNormalizeLocale(t *testing.T) {
 	cases := map[string]string{
 		"": "en", "  ": "en", "en": "en", "EN": "en", "en-US": "en",
 		"zh": "zh", "zh-CN": "zh", "zh-Hans": "zh", "fr": "fr",
+		"-en-US": "en", "_zh": "zh", ".zh": "zh",
 	}
 	for in, want := range cases {
 		if got := NormalizeLocale(in); got != want {
@@ -65,5 +66,15 @@ func TestResolveStringsAndList(t *testing.T) {
 	}
 	if resolveLocalizedList(map[string][]string{"fr": {"x"}}, "zh") != nil {
 		t.Fatal("expected nil when no match and no default")
+	}
+	// duplicate normalized keys: deterministic (sorted key order picks "zh")
+	dup := map[string][]string{"zh-Hans": {"hans"}, "zh": {"plain"}}
+	if got := resolveLocalizedList(dup, "zh"); len(got) != 1 || got[0] != "plain" {
+		t.Fatalf("duplicate normalized keys = %v, want [plain]", got)
+	}
+	// default key normalization: en-US alone must satisfy the en fallback
+	enUS := map[string][]string{"en-US": {"hello"}}
+	if got := resolveLocalizedList(enUS, "zh"); len(got) != 1 || got[0] != "hello" {
+		t.Fatalf("en-US fallback = %v", got)
 	}
 }
