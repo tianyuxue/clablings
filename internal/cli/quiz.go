@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -12,6 +13,10 @@ import (
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/watch"
 )
+
+// errQuizHelp signals that the user asked for help (h/c) and the question
+// should be redrawn.
+var errQuizHelp = errors.New("quiz help requested")
 
 // runQuiz interactively asks each question until every answer is correct and
 // returns the final (all-correct) grading results. loc selects the language for
@@ -44,7 +49,10 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 				prompt = "answers (comma-separated)"
 			}
 			fmt.Fprintf(out, "%s> ", prompt)
-			line, err := readQuizLine(ctx, in, out, help, prompt)
+			line, err := readQuizLine(ctx, in, out, help)
+			if errors.Is(err, errQuizHelp) {
+				continue // redraw the question and prompt
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -66,9 +74,10 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 
 // readQuizLine reads one line, echoing only answer characters (digits, commas,
 // spaces) until Enter. Ctrl+C, q, a closed input stream, or a cancelled context
-// aborts. h/c are passed to help (when non-nil) and the prompt is reprinted.
-// Other control/letter bytes are ignored. ANSI CSI escape sequences are skipped.
-func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool, prompt string) (string, error) {
+// aborts. h/c are passed to help (when non-nil) and return errQuizHelp so the
+// caller redraws the question. Other bytes are ignored; ANSI CSI sequences are
+// skipped.
+func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool) (string, error) {
 	var buf []byte
 	esc := false // saw ESC
 	csi := false // inside ESC [ ... sequence
@@ -99,7 +108,7 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 			}
 			if help != nil && (b == 'h' || b == 'H' || b == 'c' || b == 'C') {
 				if help(b) {
-					fmt.Fprintf(out, "%s> ", prompt)
+					return "", errQuizHelp
 				}
 				continue
 			}

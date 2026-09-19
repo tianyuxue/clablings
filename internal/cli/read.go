@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
@@ -66,28 +67,28 @@ func newReadCmd() *cobra.Command {
 }
 
 func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
-	fmt.Fprintf(w, "== %s: %s ==\n\n", ch.ID, ch.Title)
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s: %s\n\n", ch.ID, ch.Title)
 	if len(ch.Objectives) > 0 {
-		fmt.Fprintln(w, "Objectives:")
+		b.WriteString("## Objectives\n\n")
 		for _, o := range ch.Objectives {
-			fmt.Fprintf(w, "  - %s\n", o)
+			fmt.Fprintf(&b, "- %s\n", o)
 		}
-		fmt.Fprintln(w)
+		b.WriteString("\n")
 	}
-	if concept := readConceptFile(ch.Dir, loc); concept == "" {
-		fmt.Fprintln(w, "(no concept document)")
-	} else if err := renderMarkdown(w, concept); err != nil {
-		fmt.Fprint(w, concept)
-		if !strings.HasSuffix(concept, "\n") {
-			fmt.Fprintln(w)
+	if concept := readConceptFile(ch.Dir, loc); concept != "" {
+		b.WriteString(stripLeadingHeading(concept))
+		if !strings.HasSuffix(b.String(), "\n") {
+			b.WriteByte('\n')
 		}
+		b.WriteByte('\n')
 	}
 	readings, err := content.LoadReading(ch.Dir, loc)
 	if err != nil {
 		return err
 	}
 	if len(readings) > 0 {
-		fmt.Fprintln(w, "\nReading:")
+		b.WriteString("## Reading\n\n")
 		for _, r := range readings {
 			kind := ""
 			if r.Kind != "" {
@@ -97,23 +98,38 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 			if r.Section != "" {
 				section = " §" + r.Section
 			}
+			label := r.Title + section
 			if r.RFC > 0 {
-				fmt.Fprintf(w, "- RFC %d%s %s%s\n", r.RFC, section, r.Title, kind)
-			} else {
-				fmt.Fprintf(w, "- %s%s%s\n", r.Title, section, kind)
-			}
-			if r.Intro != "" {
-				fmt.Fprintf(w, "  Intro: %s\n", r.Intro)
-			}
-			if r.Question != "" {
-				fmt.Fprintf(w, "  Question: %s\n", r.Question)
+				label = fmt.Sprintf("RFC %d%s %s", r.RFC, section, r.Title)
 			}
 			if r.URL != "" {
-				fmt.Fprintf(w, "  %s\n", hyperlink(r.URL))
+				fmt.Fprintf(&b, "- [%s](%s)%s\n", label, r.URL, kind)
+			} else {
+				fmt.Fprintf(&b, "- %s%s\n", label, kind)
+			}
+			if r.Intro != "" {
+				fmt.Fprintf(&b, "  - Intro: %s\n", r.Intro)
+			}
+			if r.Question != "" {
+				fmt.Fprintf(&b, "  - Question: %s\n", r.Question)
 			}
 		}
 	}
-	return nil
+	return renderMarkdown(w, b.String())
+}
+
+// stripLeadingHeading drops a leading `# ...` title line from a concept body,
+// since printChapterRead already emits the chapter title as the H1.
+func stripLeadingHeading(md string) string {
+	s := strings.TrimLeft(md, "\n")
+	if strings.HasPrefix(s, "# ") {
+		if i := strings.IndexByte(s, '\n'); i >= 0 {
+			s = s[i+1:]
+		} else {
+			s = ""
+		}
+	}
+	return strings.TrimLeft(s, "\n")
 }
 
 // renderMarkdown renders Markdown for a terminal: styled when stdout is a TTY,
@@ -141,17 +157,15 @@ func renderMarkdown(w io.Writer, md string) error {
 	if err != nil {
 		return err
 	}
-	_, err = io.WriteString(w, out)
+	_, err = io.WriteString(w, linkify(out))
 	return err
 }
 
-// hyperlink wraps url in an OSC 8 hyperlink on a terminal, so it is clickable;
-// elsewhere it returns the bare URL.
-func hyperlink(url string) string {
-	if term.IsTerminal(int(os.Stdout.Fd())) {
-		return "\x1b]8;;" + url + "\x1b\\" + url + "\x1b]8;;\x1b\\"
-	}
-	return url
+var urlRe = regexp.MustCompile(`https?://[^\s)\]]+`)
+
+// linkify wraps bare URLs in OSC 8 hyperlinks so terminal output is clickable.
+func linkify(s string) string {
+	return urlRe.ReplaceAllString(s, "\x1b]8;;$0\x1b\\$0\x1b]8;;\x1b\\")
 }
 
 // readConceptFile returns concept.<locale>.md with fallback to the default
