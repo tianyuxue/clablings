@@ -149,6 +149,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			if sess.Current() == cur && ctx.Err() == nil {
 				return fmt.Errorf("quiz %s was not completed", cur.FullID())
 			}
+			if quit, clean := drainKeys(byteCh); quit || clean {
+				return handleQuit(ctx, sess, clean, out, errOut)
+			}
 			if interactive {
 				watch.WriteLegend(out)
 			}
@@ -298,13 +301,16 @@ func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 // On verify failure it returns (nil, false, nil) so the caller keeps using the
 // existing watcher.
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
+	wasQuiz := sess.Current() != nil && sess.Current().Type == content.TypeQuiz
 	if err := sess.VerifyNow(ctx); err != nil {
 		if errors.Is(err, watch.ErrQuizAborted) {
 			fmt.Fprintln(out, "quiz aborted")
+			fmt.Fprintln(out, quitNotice)
 			return nil, true, nil
 		}
-		if errors.Is(err, context.Canceled) {
+		if wasQuiz && errors.Is(err, context.Canceled) {
 			fmt.Fprintln(out, "quiz aborted")
+			fmt.Fprintln(out, quitNotice)
 			return nil, true, nil
 		}
 		if errors.Is(err, watch.ErrQuizUnsupported) {
