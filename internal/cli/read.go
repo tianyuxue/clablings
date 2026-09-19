@@ -109,7 +109,7 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 				label = fmt.Sprintf("RFC %d%s %s", r.RFC, section, r.Title)
 			}
 			fmt.Fprintf(w, "  - %s%s\n", hyperlink(label, r.URL), kind)
-			if r.URL != "" && !isTTY() {
+			if r.URL != "" {
 				fmt.Fprintf(w, "      %s\n", r.URL)
 			}
 			if r.Intro != "" {

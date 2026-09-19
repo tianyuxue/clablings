@@ -41,6 +41,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 		redraw := false
 		for {
 			if redraw {
+				fmt.Fprint(out, "\n\n")
 				watch.WriteLegend(out)
 			}
 			redraw = false
