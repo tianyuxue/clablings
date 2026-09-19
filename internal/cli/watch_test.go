@@ -399,3 +399,33 @@ func TestVerifyAndReloadQuizCanceledQuits(t *testing.T) {
 		t.Fatalf("out = %q, want aborted notice", out.String())
 	}
 }
+
+func TestWatchLoopAutoPresentsQuiz(t *testing.T) {
+	ch := &content.Chapter{ID: "c1"}
+	ex := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
+	ch.Exercises = []*content.Exercise{ex}
+	lib := &content.Library{Root: t.TempDir(), Chapters: []*content.Chapter{ch},
+		Order: []*content.Exercise{ex}, ByID: map[string]*content.Exercise{"c1/q1": ex}}
+	st, _ := state.Load(lib.Root)
+	cfg, _ := config.LoadFrom("")
+	called := 0
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			called++
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", nil, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("quiz handler called %d times", called)
+	}
+}
