@@ -51,3 +51,5 @@ default value is used.
   edit the library as your normal user.
 - Containers deployed by older builds (static topology names) are not matched by
   the instance-derived destroy; remove them with `containerlab destroy -t <topology>`.
+- Install with `make install` (defaults to `~/.local/bin`; override with
+  `PREFIX=...`/`DESTDIR=...`). Ensure the destination is on your `PATH`.

@@ -54,6 +54,7 @@ install: build
 	@echo "installed $(BINDIR)/$(BINARY)"
 
 uninstall:
+	@test -n "$(BINARY)" || { echo "BINARY is empty" >&2; exit 1; }
 	rm -f $(BINDIR)/$(BINARY)
 	@echo "removed $(BINDIR)/$(BINARY)"
 
@@ -87,7 +88,7 @@ help:
 	@echo "  fmt              go fmt"
 	@echo "  tidy             go mod tidy"
 	@echo "  run              make run ARGS=\"list --root ../clab-exercises\""
-	@echo "  install          install to \$$HOME/.local/bin (override PREFIX/DESTDIR)"
-	@echo "  uninstall        remove installed binary"
+	@echo "  install          install to $(BINDIR) (override PREFIX/DESTDIR)"
+	@echo "  uninstall        remove $(BINDIR)/$(BINARY)"
 	@echo "  package          cross-compile and package tar.gz + checksums ($(PLATFORMS))"
 	@echo "  clean/distclean  clean up"
