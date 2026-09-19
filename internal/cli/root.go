@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -8,6 +9,11 @@ import (
 
 	"github.com/tianyuxue/clablings/internal/content"
 )
+
+// exitCodeError carries a process exit code from a command to Execute.
+type exitCodeError struct{ code int }
+
+func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 // Version is overridden at build time via -ldflags; defaults to dev.
 var Version = "dev"
@@ -25,7 +31,22 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newWatchCmd())
 	cmd.AddCommand(newRunCmd())
 	cmd.AddCommand(newResetCmd())
+	cmd.AddCommand(newTestCmd())
 	return cmd
+}
+
+// Execute runs the root command and returns the process exit code to main.
+func Execute() int {
+	root := NewRootCmd()
+	if err := root.Execute(); err != nil {
+		var ec *exitCodeError
+		if errors.As(err, &ec) {
+			return ec.code
+		}
+		fmt.Fprintf(os.Stderr, "clablings: error: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func resolveRoot(flag string) (string, error) {
