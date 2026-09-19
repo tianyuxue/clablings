@@ -57,7 +57,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newResetCmd())
 	cmd.AddCommand(newTestCmd())
 	cmd.AddCommand(newDebugCmd())
-	cmd.PersistentFlags().StringVar(&langFlag, "lang", "", "content language: en or zh (default: en)")
+	cmd.AddCommand(newReadCmd())
 	return cmd
 }
 

@@ -147,3 +147,13 @@ type Library struct {
 	ByID     map[string]*Exercise
 	Order    []*Exercise
 }
+
+// ChapterByID returns the chapter with the given ID, or nil.
+func (l *Library) ChapterByID(id string) *Chapter {
+	for _, ch := range l.Chapters {
+		if ch.ID == id {
+			return ch
+		}
+	}
+	return nil
+}
