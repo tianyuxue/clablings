@@ -102,16 +102,13 @@ func selectExercises(lib *content.Library, id string, all bool) []*content.Exerc
 }
 
 // engineNeededFor reports whether any considered, non-skipped exercise requires
-// the container engine (a non-quiz, or a quiz whose chapter declares a topology).
+// the container engine. Quizzes are graded from answers and never deploy.
 func engineNeededFor(exs []*content.Exercise, skip func(*content.Exercise) bool) bool {
 	for _, ex := range exs {
 		if skip(ex) {
 			continue
 		}
 		if ex.Type != content.TypeQuiz {
-			return true
-		}
-		if ex.ChapterRef != nil && ex.ChapterRef.HasTopology() {
 			return true
 		}
 	}
@@ -145,7 +142,7 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 	selected := selectExercises(lib, id, all)
 	images := []string{}
 	for _, ex := range selected {
-		if skip(ex) {
+		if skip(ex) || ex.Type == content.TypeQuiz {
 			continue
 		}
 		if ex.Build != nil && ex.Build.Image != "" {

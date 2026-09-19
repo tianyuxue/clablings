@@ -196,7 +196,7 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 		s.current = nil
 		return s.opts.State.Save(s.opts.Library.Root)
 	}
-	return s.advance(ctx, ex, next)
+	return s.advance(ctx, next)
 }
 
 func (s *Session) locateCurrent() (*content.Exercise, error) {
@@ -277,7 +277,7 @@ func (s *Session) setActiveAndReset(ctx context.Context, ex *content.Exercise) e
 }
 
 // advance switches to the next exercise after a pass and persists state.
-func (s *Session) advance(ctx context.Context, from, next *content.Exercise) error {
+func (s *Session) advance(ctx context.Context, next *content.Exercise) error {
 	if err := s.ensureDeployed(ctx, next); err != nil {
 		return err
 	}

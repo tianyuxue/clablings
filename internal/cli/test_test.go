@@ -55,10 +55,10 @@ func TestEngineNeededFor(t *testing.T) {
 		t.Fatal("skipped quiz must not need engine")
 	}
 	if engineNeededFor([]*content.Exercise{quiz}, func(*content.Exercise) bool { return false }) {
-		t.Fatal("topology-less quiz must not need engine")
+		t.Fatal("quiz must never need engine")
 	}
-	if !engineNeededFor([]*content.Exercise{quizTopo}, func(*content.Exercise) bool { return false }) {
-		t.Fatal("quiz whose chapter has a topology needs engine")
+	if engineNeededFor([]*content.Exercise{quizTopo}, func(*content.Exercise) bool { return false }) {
+		t.Fatal("quiz with a topology chapter still must not need engine")
 	}
 	if !engineNeededFor([]*content.Exercise{lab}, func(*content.Exercise) bool { return false }) {
 		t.Fatal("lab exercise needs engine")

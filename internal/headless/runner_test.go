@@ -178,3 +178,36 @@ func TestRunOneQuizDoesNotDeploy(t *testing.T) {
 		t.Fatalf("err=%v results=%d deployed=%v", err, len(results), fe.deployed)
 	}
 }
+
+func TestRunAllQuizzesNeedNoDeploy(t *testing.T) {
+	ch1 := &content.Chapter{ID: "c1", TopologyPath: "/c1.clab.yml"}
+	q1 := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch1}
+	e1 := &content.Exercise{ID: "e1", Chapter: "c1", Type: content.TypeConfigFix, ChapterRef: ch1}
+	ch1.Exercises = []*content.Exercise{q1, e1}
+	ch2 := &content.Chapter{ID: "c2", TopologyPath: "/c2.clab.yml"}
+	q2 := &content.Exercise{ID: "q2", Chapter: "c2", Type: content.TypeQuiz, ChapterRef: ch2}
+	e2 := &content.Exercise{ID: "e2", Chapter: "c2", Type: content.TypeConfigFix, ChapterRef: ch2}
+	ch2.Exercises = []*content.Exercise{q2, e2}
+	lib := &content.Library{
+		Chapters: []*content.Chapter{ch1, ch2},
+		Order:    []*content.Exercise{q1, e1, q2, e2},
+		ByID:     map[string]*content.Exercise{"c1/q1": q1, "c1/e1": e1, "c2/q2": q2, "c2/e2": e2},
+	}
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	var ran []string
+	err := RunAll(context.Background(), lib, fe, fr,
+		func(_ context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			ran = append(ran, ex.FullID())
+			return []assert.Result{{Passed: true}}, nil
+		}, nil, nil)
+	if err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+	if len(fe.deployed) != 2 || fe.deployed[0] != "c1" || fe.deployed[1] != "c2" {
+		t.Fatalf("deployed = %v, want [c1 c2]", fe.deployed)
+	}
+	if len(ran) != 4 {
+		t.Fatalf("ran = %v, want all four", ran)
+	}
+}
