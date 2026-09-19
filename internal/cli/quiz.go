@@ -44,7 +44,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 				prompt = "answers (comma-separated)"
 			}
 			fmt.Fprintf(out, "%s> ", prompt)
-			line, err := readQuizLine(ctx, in, out, help)
+			line, err := readQuizLine(ctx, in, out, help, prompt)
 			if err != nil {
 				return nil, err
 			}
@@ -64,10 +64,11 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	return assert.GradeQuiz(ex, answers), nil
 }
 
-// readQuizLine reads one line, echoing printable bytes, until Enter. Ctrl+C, q,
-// a closed input stream, or a cancelled context aborts. h/c are passed to help
-// (when non-nil). ANSI CSI escape sequences (e.g. arrow keys) are ignored.
-func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool) (string, error) {
+// readQuizLine reads one line, echoing only answer characters (digits, commas,
+// spaces) until Enter. Ctrl+C, q, a closed input stream, or a cancelled context
+// aborts. h/c are passed to help (when non-nil) and the prompt is reprinted.
+// Other control/letter bytes are ignored. ANSI CSI escape sequences are skipped.
+func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool, prompt string) (string, error) {
 	var buf []byte
 	esc := false // saw ESC
 	csi := false // inside ESC [ ... sequence
@@ -98,7 +99,7 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 			}
 			if help != nil && (b == 'h' || b == 'H' || b == 'c' || b == 'C') {
 				if help(b) {
-					fmt.Fprint(out, "answer> ")
+					fmt.Fprintf(out, "%s> ", prompt)
 				}
 				continue
 			}
@@ -117,7 +118,7 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 					fmt.Fprint(out, "\b \b")
 				}
 			default:
-				if b >= 0x20 && b < 0x7f {
+				if (b >= '0' && b <= '9') || b == ',' || b == ' ' {
 					buf = append(buf, b)
 					fmt.Fprintf(out, "%c", b)
 				}

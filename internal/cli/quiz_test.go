@@ -106,7 +106,7 @@ func TestRunQuizMultiSelectPartialRetry(t *testing.T) {
 func TestReadQuizLineBackspaceAndEscape(t *testing.T) {
 	// "2\x7f1\n" -> backspace removes '2' -> "1"; ESC[C (right arrow) ignored.
 	var out bytes.Buffer
-	line, err := readQuizLine(context.Background(), feed("2\x7f1\x1b[C\n"), &out, nil)
+	line, err := readQuizLine(context.Background(), feed("2\x7f1\x1b[C\n"), &out, nil, "answer")
 	if err != nil || line != "1" {
 		t.Fatalf("line=%q err=%v", line, err)
 	}
@@ -114,7 +114,7 @@ func TestReadQuizLineBackspaceAndEscape(t *testing.T) {
 
 func TestReadQuizLineClosedNoNewlineAborts(t *testing.T) {
 	var out bytes.Buffer
-	_, err := readQuizLine(context.Background(), feed("1"), &out, nil)
+	_, err := readQuizLine(context.Background(), feed("1"), &out, nil, "answer")
 	if !errors.Is(err, watch.ErrQuizAborted) {
 		t.Fatalf("err=%v, want ErrQuizAborted", err)
 	}
@@ -138,5 +138,16 @@ func TestRunQuizHintKeyThenAnswer(t *testing.T) {
 	}
 	if !results[0].Passed || !bytes.Contains(out.Bytes(), []byte("UNIQUE_HINT_MARKER")) {
 		t.Fatalf("hint not shown or not passed: %v\n%s", results, out.String())
+	}
+}
+
+func TestReadQuizLineIgnoresLetters(t *testing.T) {
+	var out bytes.Buffer
+	line, err := readQuizLine(context.Background(), feed("a2x\n"), &out, nil, "answer")
+	if err != nil || line != "2" {
+		t.Fatalf("line=%q err=%v", line, err)
+	}
+	if bytes.ContainsAny(out.Bytes(), "ax") {
+		t.Fatalf("letters were echoed: %q", out.String())
 	}
 }
