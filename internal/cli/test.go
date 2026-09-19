@@ -105,7 +105,7 @@ func runHeadless(ctx context.Context, root, id string, all bool, format string, 
 		if ex.Build != nil && ex.Build.Image != "" {
 			images = append(images, ex.Build.Image)
 		}
-		if ex.ChapterRef != nil && ex.ChapterRef.TopologyPath != "" {
+		if ex.ChapterRef != nil && ex.ChapterRef.HasTopology() {
 			if topo, terr := engine.ParseTopology(ex.ChapterRef.TopologyPath); terr == nil {
 				for _, n := range topo.Nodes {
 					if n.Image != "" {

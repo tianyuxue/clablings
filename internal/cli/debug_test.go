@@ -76,6 +76,29 @@ func TestDebugErrorsWhenNotInChapter(t *testing.T) {
 	}
 }
 
+func TestDebugErrorsOnChapterWithoutTopology(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, s string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("clablings.yaml", "version: 1\nchapters:\n  - chapters/c1\n")
+	write("chapters/c1/chapter.yaml", "id: c1\ntitle: t\n")
+	t.Setenv("PATH", t.TempDir())
+	t.Chdir(filepath.Join(root, "chapters", "c1"))
+	cmd := newDebugCmd()
+	cmd.SetArgs([]string{"--root", root})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "no topology") {
+		t.Fatalf("err = %v, want no-topology error", err)
+	}
+}
+
 func TestDebugErrorsWhenClabTuiMissing(t *testing.T) {
 	root := writeDebugLibrary(t)
 	t.Setenv("PATH", t.TempDir())

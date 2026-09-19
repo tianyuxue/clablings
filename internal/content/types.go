@@ -116,7 +116,9 @@ type Chapter struct {
 	Exercises    []*Exercise `yaml:"-"`
 }
 
-// HasTopology reports whether the chapter declares a topology.
+// HasTopology reports whether the chapter declares a topology. TopologyPath
+// and TopologyName are set together by loadChapter when chapter.yaml has a
+// non-empty topology field.
 func (c *Chapter) HasTopology() bool { return c.TopologyPath != "" }
 
 // Exercise corresponds to exercise.yaml and its directory.

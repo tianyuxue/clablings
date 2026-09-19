@@ -37,6 +37,9 @@ func newDebugCmd() *cobra.Command {
 			if ch == nil {
 				return fmt.Errorf("not inside a chapter directory; run from the chapter containing chapter.yaml")
 			}
+			if !ch.HasTopology() {
+				return fmt.Errorf("chapter %s has no topology; clab-tui requires one", ch.ID)
+			}
 			bin, err := exec.LookPath("clab-tui")
 			if err != nil {
 				return fmt.Errorf("clab-tui not found in PATH: %w", err)
