@@ -103,6 +103,34 @@ func TestRunAllSkip(t *testing.T) {
 	}
 }
 
+func TestRunAllSkipKeepsLaterExercise(t *testing.T) {
+	fe := &fakeEngine{}
+	fr := &fakeReset{}
+	var ran []string
+	err := RunAll(context.Background(), library(), fe, fr,
+		func(_ context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			ran = append(ran, ex.FullID())
+			return []assert.Result{{Passed: true}}, nil
+		},
+		func(ex *content.Exercise) bool { return ex.ID == "e1" },
+		nil)
+	if err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+	if len(fe.deployed) == 0 {
+		t.Fatalf("chapter was not deployed for the remaining exercise")
+	}
+	found := false
+	for _, id := range ran {
+		if id == "c1/e2" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("non-skipped e2 was not verified: %v", ran)
+	}
+}
+
 func TestRunOneDeploysResetsVerifiesAndDestroys(t *testing.T) {
 	fe := &fakeEngine{}
 	fr := &fakeReset{}

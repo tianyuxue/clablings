@@ -102,8 +102,26 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 	clabBin := binOr(cfg.Containerlab.BinPath, "containerlab")
 	dockerBin := binOr(cfg.Docker.BinPath, "docker")
 	eng := engine.New(clabBin, dockerBin)
+	answers := content.Answers{}
+	if answersPath != "" {
+		answers, err = content.LoadAnswers(answersPath)
+		if err != nil {
+			return 2, err
+		}
+	}
+	skip := func(ex *content.Exercise) bool {
+		return ex.Type == content.TypeQuiz && answers[ex.FullID()] == nil
+	}
+
 	images := []string{}
+	engineNeeded := false
 	for _, ex := range lib.Order {
+		if skip(ex) {
+			continue
+		}
+		if ex.Type != content.TypeQuiz {
+			engineNeeded = true
+		}
 		if ex.Build != nil && ex.Build.Image != "" {
 			images = append(images, ex.Build.Image)
 		}
@@ -117,31 +135,30 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 			}
 		}
 	}
-	if err := preflight.Check(ctx, eng.Runner(), clabBin, dockerBin, unique(images)); err != nil {
-		return 2, err
+	if engineNeeded {
+		if err := preflight.Check(ctx, eng.Runner(), clabBin, dockerBin, unique(images)); err != nil {
+			return 2, err
+		}
+	}
+
+	if !all {
+		if ex := lib.ByID[id]; ex != nil && ex.Type == content.TypeQuiz && answers[ex.FullID()] == nil {
+			return 2, fmt.Errorf("quiz %s requires --answers (headless runs cannot answer interactively)", id)
+		}
 	}
 
 	builder := build.New(eng.Runner(), dockerBin, cfg.Build.DefaultImage)
 	res := reset.New(reset.Options{Root: root, Engine: reset.FromEngine(eng), Rebuilder: builder})
-	answers := content.Answers{}
-	if answersPath != "" {
-		answers, err = content.LoadAnswers(answersPath)
-		if err != nil {
-			return 2, err
-		}
-	}
 	baseVerify := makeVerifier(eng, builder)
 	verify := func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		if ex.Type == content.TypeQuiz {
-			if ans, ok := answers[ex.FullID()]; ok {
-				return assert.GradeQuiz(ex, ans), nil
+			ans, ok := answers[ex.FullID()]
+			if !ok {
+				return []assert.Result{{Exercise: ex.FullID(), Name: ex.Title, Type: "quiz", Layer: "control-plane", Passed: false, Actual: "no answers provided"}}, nil
 			}
-			return nil, nil
+			return assert.GradeQuiz(ex, ans), nil
 		}
 		return baseVerify(ctx, ex)
-	}
-	skip := func(ex *content.Exercise) bool {
-		return ex.Type == content.TypeQuiz && answers[ex.FullID()] == nil
 	}
 
 	failed := false
@@ -168,6 +185,10 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 			return 2, err
 		}
 		emit(id, results)
+	}
+
+	if len(allResults) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "warning: no exercises were verified (quizzes are skipped without --answers)")
 	}
 
 	if format == "json" {
