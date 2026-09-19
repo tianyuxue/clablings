@@ -47,7 +47,7 @@ func TestWriteHints(t *testing.T) {
 func TestWriteLegend(t *testing.T) {
 	var buf bytes.Buffer
 	WriteLegend(&buf)
-	if !strings.Contains(buf.String(), "[h] hint") || !strings.Contains(buf.String(), "[x] clean quit") {
+	if !strings.Contains(buf.String(), "[h] hint") || !strings.Contains(buf.String(), "[c] concept") || !strings.Contains(buf.String(), "[x] clean quit") {
 		t.Fatalf("legend = %q", buf.String())
 	}
 }
