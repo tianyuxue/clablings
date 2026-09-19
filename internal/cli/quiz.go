@@ -35,11 +35,11 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 		}
 		return false
 	}
-	fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
 	answers := make([][]int, len(ex.Questions))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
 		for {
+			fmt.Fprintln(out, "(enter option numbers; h hint, c concept, q quit)")
 			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
 			for oi := range q.Options {
 				fmt.Fprintf(out, "  %d) %s\n", oi+1, q.Options[oi].Text)
