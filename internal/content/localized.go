@@ -77,6 +77,8 @@ type exerciseYAML struct {
 	Title      localizedString   `yaml:"title"`
 	Hints      []localizedString `yaml:"hints"`
 	Assertions []assertionYAML   `yaml:"assertions"`
+	Difficulty int               `yaml:"difficulty"`
+	Tags       []string          `yaml:"tags"`
 	Exercise   `yaml:",inline"`
 }
 

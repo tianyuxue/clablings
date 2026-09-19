@@ -134,9 +134,10 @@ func TestLoadWithLocaleResolvesAndFallsBack(t *testing.T) {
 
 func TestLoadWithLocaleMetadata(t *testing.T) {
 	root := writeLib(t, map[string]string{
-		"clablings.yaml":                "version: 1\nchapters:\n  - chapters/c1\n",
-		"chapters/c1/chapter.yaml":      "id: c1\ntitle: STP\ndifficulty: 3\ntags: [l2, stp]\nestimated_minutes: 30\nprerequisites: [02-vlan]\nobjectives:\n  en: [a, b]\n  zh: [甲, 乙]\ntopology: topology.clab.yml\n",
-		"chapters/c1/topology.clab.yml": "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: STP\ndifficulty: 3\ntags: [l2, stp]\nestimated_minutes: 30\nprerequisites: [02-vlan]\nobjectives:\n  en: [a, b]\n  zh: [甲, 乙]\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ndifficulty: 2\ntags: [stp]\nassertions:\n  - name: x\n    type: exec\n    node: n1\n    cmd: \"true\"\n",
 	})
 	lib, err := LoadWithLocale(root, "zh")
 	if err != nil {
@@ -148,5 +149,9 @@ func TestLoadWithLocaleMetadata(t *testing.T) {
 	}
 	if len(ch.Objectives) != 2 || ch.Objectives[0] != "甲" {
 		t.Fatalf("objectives = %v", ch.Objectives)
+	}
+	ex := lib.Chapters[0].Exercises[0]
+	if ex.Difficulty != 2 || len(ex.Tags) != 1 || ex.Tags[0] != "stp" {
+		t.Fatalf("exercise metadata = %+v", ex)
 	}
 }

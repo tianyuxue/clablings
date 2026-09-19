@@ -138,6 +138,8 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 	ex := dto.Exercise
 	ex.Title = dto.Title.resolve(locale)
 	ex.Hints = resolveStrings(dto.Hints, locale)
+	ex.Difficulty = dto.Difficulty
+	ex.Tags = dto.Tags
 	ex.Assertions = make([]Assertion, len(dto.Assertions))
 	for i := range dto.Assertions {
 		ex.Assertions[i] = dto.Assertions[i].Assertion
