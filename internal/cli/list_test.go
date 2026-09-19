@@ -22,6 +22,8 @@ func sampleLibrary() *content.Library {
 	return &content.Library{
 		Manifest: content.Manifest{Version: 1},
 		Chapters: []*content.Chapter{ch1, ch2},
+		Order:    []*content.Exercise{ex1, ex2},
+		ByID:     map[string]*content.Exercise{"01-ospf-mtu/01_mtu": ex1, "02-arp/01_arp": ex2},
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tianyuxue/clablings/internal/assert"
+	"github.com/tianyuxue/clablings/internal/content"
 )
 
 func TestExitCodeForResults(t *testing.T) {
@@ -28,6 +29,39 @@ func TestParseTestArgs(t *testing.T) {
 	}
 	if _, err := parseTestArgs([]string{"c1/e1"}, true); err == nil {
 		t.Fatal("expected error combining --all with an id")
+	}
+}
+
+func TestSelectExercises(t *testing.T) {
+	lib := sampleLibrary()
+	if got := selectExercises(lib, "", true); len(got) != len(lib.Order) {
+		t.Fatalf("all = %d", len(got))
+	}
+	ex := lib.Order[0]
+	if got := selectExercises(lib, ex.FullID(), false); len(got) != 1 || got[0] != ex {
+		t.Fatalf("single = %v", got)
+	}
+	if got := selectExercises(lib, "nope", false); got != nil {
+		t.Fatalf("unknown = %v", got)
+	}
+}
+
+func TestEngineNeededFor(t *testing.T) {
+	quiz := &content.Exercise{ID: "q1", Type: content.TypeQuiz}
+	ch := &content.Chapter{ID: "c1", Topology: "topology.clab.yml", TopologyPath: "topology.clab.yml"}
+	quizTopo := &content.Exercise{ID: "q2", Type: content.TypeQuiz, ChapterRef: ch}
+	lab := &content.Exercise{ID: "e1", Type: content.TypeConfigFix}
+	if engineNeededFor([]*content.Exercise{quiz}, func(*content.Exercise) bool { return true }) {
+		t.Fatal("skipped quiz must not need engine")
+	}
+	if engineNeededFor([]*content.Exercise{quiz}, func(*content.Exercise) bool { return false }) {
+		t.Fatal("topology-less quiz must not need engine")
+	}
+	if !engineNeededFor([]*content.Exercise{quizTopo}, func(*content.Exercise) bool { return false }) {
+		t.Fatal("quiz whose chapter has a topology needs engine")
+	}
+	if !engineNeededFor([]*content.Exercise{lab}, func(*content.Exercise) bool { return false }) {
+		t.Fatal("lab exercise needs engine")
 	}
 }
 

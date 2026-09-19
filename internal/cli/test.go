@@ -37,7 +37,8 @@ func newTestCmd() *cobra.Command {
 			}
 			code, err := runHeadless(cmd.Context(), resolved, id, all, answersPath, format, cmd)
 			if err != nil {
-				return err
+				fmt.Fprintf(cmd.ErrOrStderr(), "error: %v\n", err)
+				return &exitCodeError{code: code}
 			}
 			if code != 0 {
 				return &exitCodeError{code: code}
@@ -89,6 +90,34 @@ func unique(in []string) []string {
 	return out
 }
 
+// selectExercises returns the exercises a run considers.
+func selectExercises(lib *content.Library, id string, all bool) []*content.Exercise {
+	if all {
+		return lib.Order
+	}
+	if ex := lib.ByID[id]; ex != nil {
+		return []*content.Exercise{ex}
+	}
+	return nil
+}
+
+// engineNeededFor reports whether any considered, non-skipped exercise requires
+// the container engine (a non-quiz, or a quiz whose chapter declares a topology).
+func engineNeededFor(exs []*content.Exercise, skip func(*content.Exercise) bool) bool {
+	for _, ex := range exs {
+		if skip(ex) {
+			continue
+		}
+		if ex.Type != content.TypeQuiz {
+			return true
+		}
+		if ex.ChapterRef != nil && ex.ChapterRef.HasTopology() {
+			return true
+		}
+	}
+	return false
+}
+
 func runHeadless(ctx context.Context, root, id string, all bool, answersPath, format string, cmd *cobra.Command) (int, error) {
 	lib, err := content.LoadWithLocale(root, locale(cmd.ErrOrStderr()))
 	if err != nil {
@@ -113,14 +142,11 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 		return ex.Type == content.TypeQuiz && answers[ex.FullID()] == nil
 	}
 
+	selected := selectExercises(lib, id, all)
 	images := []string{}
-	engineNeeded := false
-	for _, ex := range lib.Order {
+	for _, ex := range selected {
 		if skip(ex) {
 			continue
-		}
-		if ex.Type != content.TypeQuiz {
-			engineNeeded = true
 		}
 		if ex.Build != nil && ex.Build.Image != "" {
 			images = append(images, ex.Build.Image)
@@ -135,7 +161,7 @@ func runHeadless(ctx context.Context, root, id string, all bool, answersPath, fo
 			}
 		}
 	}
-	if engineNeeded {
+	if engineNeededFor(selected, skip) {
 		if err := preflight.Check(ctx, eng.Runner(), clabBin, dockerBin, unique(images)); err != nil {
 			return 2, err
 		}
