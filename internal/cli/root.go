@@ -30,6 +30,8 @@ func locale(errOut io.Writer) string {
 	if v := os.Getenv("CLABLINGS_LANG"); v != "" {
 		return content.NormalizeLocale(v)
 	}
+	// Config is read again here (commands may also load it); this keeps the
+	// lookup self-contained at the cost of one extra read.
 	cfg, err := config.Load()
 	if err != nil && errOut != nil {
 		fmt.Fprintf(errOut, "warning: reading config failed, using defaults: %v\n", err)

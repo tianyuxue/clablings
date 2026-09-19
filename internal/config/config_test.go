@@ -111,6 +111,21 @@ func TestLoadFromInvalidYAML(t *testing.T) {
 	}
 }
 
+func TestLoadFromLanguage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("language: zh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Language != "zh" {
+		t.Fatalf("language = %q", cfg.Language)
+	}
+}
+
 func TestLoadFromReadErrorReturnsDefaults(t *testing.T) {
 	dir := t.TempDir() // a directory cannot be read as a file
 	cfg, err := LoadFrom(dir)

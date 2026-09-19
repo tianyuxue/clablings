@@ -10,24 +10,20 @@ import (
 // DefaultLocale is the fallback content language.
 const DefaultLocale = "en"
 
-// NormalizeLocale reduces a BCP-47-ish tag to the supported set {en, zh} or its
-// primary subtag.
+// NormalizeLocale reduces a BCP-47-ish tag to its primary subtag, lowercased.
 func NormalizeLocale(tag string) string {
 	t := strings.ToLower(strings.TrimSpace(tag))
+	t = strings.TrimLeft(t, "-_.")
 	if t == "" {
 		return DefaultLocale
 	}
 	if i := strings.IndexAny(t, "-_."); i > 0 {
 		t = t[:i]
 	}
-	switch t {
-	case "en":
-		return "en"
-	case "zh":
-		return "zh"
-	default:
-		return t
+	if t == "" {
+		return DefaultLocale
 	}
+	return t
 }
 
 // localizedString accepts either a scalar (default language) or a locale->text map.
@@ -45,7 +41,11 @@ func (l *localizedString) UnmarshalYAML(node *yaml.Node) error {
 		if err := node.Decode(&m); err != nil {
 			return err
 		}
-		l.Values = m
+		normalized := make(map[string]string, len(m))
+		for k, v := range m {
+			normalized[NormalizeLocale(k)] = v
+		}
+		l.Values = normalized
 		return nil
 	default:
 		return fmt.Errorf("localized string must be a scalar or a map, got kind %d", node.Kind)
@@ -56,15 +56,7 @@ func (l localizedString) resolve(locale string) string {
 	if s := l.Values[locale]; s != "" {
 		return s
 	}
-	if s := l.Values[DefaultLocale]; s != "" {
-		return s
-	}
-	for _, s := range l.Values {
-		if s != "" {
-			return s
-		}
-	}
-	return ""
+	return l.Values[DefaultLocale]
 }
 
 func resolveStrings(in []localizedString, locale string) []string {
@@ -78,21 +70,19 @@ func resolveStrings(in []localizedString, locale string) []string {
 	return out
 }
 
-// resolveLocalizedList picks the requested locale from a locale->[]string map.
+// resolveLocalizedList picks the requested locale from a locale->[]string map,
+// falling back to the default language. Returns nil when nothing matches.
 func resolveLocalizedList(in map[string][]string, locale string) []string {
-	if in == nil {
+	if len(in) == 0 {
 		return nil
 	}
 	if v := in[locale]; len(v) > 0 {
 		return v
 	}
-	if v := in[DefaultLocale]; len(v) > 0 {
-		return v
-	}
-	for _, v := range in {
-		if len(v) > 0 {
+	for k, v := range in {
+		if NormalizeLocale(k) == locale && len(v) > 0 {
 			return v
 		}
 	}
-	return nil
+	return in[DefaultLocale]
 }
