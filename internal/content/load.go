@@ -82,11 +82,18 @@ func loadManifest(path string) (Manifest, error) {
 	return m, nil
 }
 
-func loadChapter(dir, _ string) (*Chapter, error) {
-	var ch Chapter
-	if err := decodeYAML(filepath.Join(dir, "chapter.yaml"), &ch); err != nil {
+func loadChapter(dir, locale string) (*Chapter, error) {
+	var dto chapterYAML
+	if err := decodeYAML(filepath.Join(dir, "chapter.yaml"), &dto); err != nil {
 		return nil, err
 	}
+	ch := dto.Chapter
+	ch.Title = dto.Title.resolve(locale)
+	ch.Objectives = resolveLocalizedList(dto.Objectives, locale)
+	ch.Difficulty = dto.Difficulty
+	ch.Tags = dto.Tags
+	ch.EstimatedMinutes = dto.EstimatedMinutes
+	ch.Prerequisites = dto.Prerequisites
 	if ch.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)
 	}
@@ -123,10 +130,19 @@ func readTopologyName(path string) (string, error) {
 	return raw.Name, nil
 }
 
-func loadExercise(dir, _ string) (*Exercise, error) {
-	var ex Exercise
-	if err := decodeYAML(filepath.Join(dir, "exercise.yaml"), &ex); err != nil {
+func loadExercise(dir, locale string) (*Exercise, error) {
+	var dto exerciseYAML
+	if err := decodeYAML(filepath.Join(dir, "exercise.yaml"), &dto); err != nil {
 		return nil, err
+	}
+	ex := dto.Exercise
+	ex.Title = dto.Title.resolve(locale)
+	ex.Hints = resolveStrings(dto.Hints, locale)
+	ex.Assertions = make([]Assertion, len(dto.Assertions))
+	for i := range dto.Assertions {
+		ex.Assertions[i] = dto.Assertions[i].Assertion
+		ex.Assertions[i].Name = dto.Assertions[i].Name.resolve(locale)
+		ex.Assertions[i].Hint = dto.Assertions[i].Hint.resolve(locale)
 	}
 	if ex.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)

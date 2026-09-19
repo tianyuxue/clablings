@@ -51,12 +51,12 @@ type Deploy struct {
 
 // Assertion is a single assertion declaration.
 type Assertion struct {
-	Name    string `yaml:"name"`
+	Name    string `yaml:"-"`
 	Type    string `yaml:"type"` // exec / file / interface / link
 	Layer   string `yaml:"layer"`
 	Node    string `yaml:"node"`
 	Timeout string `yaml:"timeout"`
-	Hint    string `yaml:"hint"`
+	Hint    string `yaml:"-"`
 
 	// exec
 	Cmd   string `yaml:"cmd"`
@@ -96,11 +96,17 @@ type Match struct {
 // Chapter corresponds to chapter.yaml and its directory.
 type Chapter struct {
 	ID       string   `yaml:"id"`
-	Title    string   `yaml:"title"`
+	Title    string   `yaml:"-"`
 	Topology string   `yaml:"topology"`
 	Deploy   Deploy   `yaml:"deploy"`
 	Setup    []string `yaml:"setup"`
 	Teardown []string `yaml:"teardown"`
+
+	Difficulty       int      `yaml:"-"`
+	Tags             []string `yaml:"-"`
+	EstimatedMinutes int      `yaml:"-"`
+	Prerequisites    []string `yaml:"-"`
+	Objectives       []string `yaml:"-"`
 
 	Dir          string      `yaml:"-"`
 	TopologyPath string      `yaml:"-"`
@@ -112,15 +118,18 @@ type Chapter struct {
 // Exercise corresponds to exercise.yaml and its directory.
 type Exercise struct {
 	ID         string        `yaml:"id"`
-	Title      string        `yaml:"title"`
+	Title      string        `yaml:"-"`
 	Type       ExerciseType  `yaml:"type"`
 	Timeout    string        `yaml:"timeout"`
 	Files      []FileMapping `yaml:"files"`
 	Reload     []NodeCmd     `yaml:"reload"`
-	Hints      []string      `yaml:"hints"`
+	Hints      []string      `yaml:"-"`
 	Build      *BuildSpec    `yaml:"build"`
 	Run        *RunSpec      `yaml:"run"`
-	Assertions []Assertion   `yaml:"assertions"`
+	Assertions []Assertion   `yaml:"-"`
+
+	Difficulty int      `yaml:"-"`
+	Tags       []string `yaml:"-"`
 
 	Dir        string   `yaml:"-"`
 	Chapter    string   `yaml:"-"`

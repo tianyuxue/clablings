@@ -60,6 +60,33 @@ func (l localizedString) resolve(locale string) string {
 	return l.Values[DefaultLocale]
 }
 
+// chapterYAML is the on-disk shape of chapter.yaml. Human-text fields are
+// localized; non-text metadata is copied into the runtime Chapter.
+type chapterYAML struct {
+	Title            localizedString     `yaml:"title"`
+	Objectives       map[string][]string `yaml:"objectives"`
+	Difficulty       int                 `yaml:"difficulty"`
+	Tags             []string            `yaml:"tags"`
+	EstimatedMinutes int                 `yaml:"estimated_minutes"`
+	Prerequisites    []string            `yaml:"prerequisites"`
+	Chapter          `yaml:",inline"`
+}
+
+// exerciseYAML is the on-disk shape of exercise.yaml.
+type exerciseYAML struct {
+	Title      localizedString   `yaml:"title"`
+	Hints      []localizedString `yaml:"hints"`
+	Assertions []assertionYAML   `yaml:"assertions"`
+	Exercise   `yaml:",inline"`
+}
+
+// assertionYAML is the on-disk shape of a single assertion.
+type assertionYAML struct {
+	Name      localizedString `yaml:"name"`
+	Hint      localizedString `yaml:"hint"`
+	Assertion `yaml:",inline"`
+}
+
 func resolveStrings(in []localizedString, locale string) []string {
 	if len(in) == 0 {
 		return nil
