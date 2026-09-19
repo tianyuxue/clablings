@@ -64,6 +64,11 @@ func PrepareTopology(ch *content.Chapter) (string, error) {
 		os.Remove(tmpName)
 		return "", fmt.Errorf("commit derived topology %s: %w", path, err)
 	}
+	// CreateTemp makes the file 0600; make it world-readable like a normal
+	// topology so other tools/users can inspect it.
+	if err := os.Chmod(path, 0o644); err != nil {
+		return "", fmt.Errorf("chmod derived topology %s: %w", path, err)
+	}
 	return path, nil
 }
 

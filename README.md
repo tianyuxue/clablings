@@ -33,3 +33,18 @@ build:
 
 On a read failure or missing field an English warning is printed and the
 default value is used.
+
+## Notes
+
+- Labs are isolated per library instance: the lab name is
+  `<rootbasename>-<sha1(abs root)[:8]>-<topology name>` (override the instance id
+  with `CLABLINGS_INSTANCE`). Container names are `clab-<lab>-<node>`.
+- Because this containerlab build ignores `--name` on `destroy`/`redeploy`, each
+  deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
+  original (gitignored in the library repo) and runs containerlab against it.
+  The library directory must therefore be writable.
+- Running clablings with `sudo` makes `git checkout` and the derived topology
+  root-owned; run `sudo chown -R "$USER" <library>` afterwards if you need to
+  edit the library as your normal user.
+- Containers deployed by older builds (static topology names) are not matched by
+  the instance-derived destroy; remove them with `containerlab destroy -t <topology>`.
