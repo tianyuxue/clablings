@@ -25,7 +25,7 @@ func newDebugCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			lib, err := content.Load(resolved)
+			lib, err := content.LoadWithLocale(resolved, locale(cmd.ErrOrStderr()))
 			if err != nil {
 				return err
 			}

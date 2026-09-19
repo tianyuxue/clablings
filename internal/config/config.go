@@ -19,6 +19,7 @@ const (
 
 // Config is the user configuration; defaults are used for omitted fields.
 type Config struct {
+	Language     string `yaml:"language"`
 	Containerlab struct {
 		BinPath string `yaml:"bin_path"`
 	} `yaml:"containerlab"`

@@ -88,7 +88,7 @@ func unique(in []string) []string {
 }
 
 func runHeadless(ctx context.Context, root, id string, all bool, format string, cmd *cobra.Command) (int, error) {
-	lib, err := content.Load(root)
+	lib, err := content.LoadWithLocale(root, locale(cmd.ErrOrStderr()))
 	if err != nil {
 		return 2, err
 	}

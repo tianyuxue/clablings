@@ -10,8 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Load parses the library root.
-func Load(root string) (*Library, error) {
+// Load parses the library using the default locale.
+func Load(root string) (*Library, error) { return LoadWithLocale(root, DefaultLocale) }
+
+// LoadWithLocale parses the library, resolving human text to locale.
+func LoadWithLocale(root, locale string) (*Library, error) {
+	locale = NormalizeLocale(locale)
 	manifest, err := loadManifest(filepath.Join(root, ManifestName))
 	if err != nil {
 		return nil, err
@@ -27,7 +31,7 @@ func Load(root string) (*Library, error) {
 
 	for _, rel := range manifest.Chapters {
 		chDir := filepath.Join(root, rel)
-		ch, err := loadChapter(chDir)
+		ch, err := loadChapter(chDir, locale)
 		if err != nil {
 			return nil, fmt.Errorf("chapter %s: %w", rel, err)
 		}
@@ -47,7 +51,7 @@ func Load(root string) (*Library, error) {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			ex, err := loadExercise(filepath.Join(exDir, name))
+			ex, err := loadExercise(filepath.Join(exDir, name), locale)
 			if err != nil {
 				return nil, fmt.Errorf("exercise %s/%s: %w", ch.ID, name, err)
 			}
@@ -78,7 +82,7 @@ func loadManifest(path string) (Manifest, error) {
 	return m, nil
 }
 
-func loadChapter(dir string) (*Chapter, error) {
+func loadChapter(dir, _ string) (*Chapter, error) {
 	var ch Chapter
 	if err := decodeYAML(filepath.Join(dir, "chapter.yaml"), &ch); err != nil {
 		return nil, err
@@ -119,7 +123,7 @@ func readTopologyName(path string) (string, error) {
 	return raw.Name, nil
 }
 
-func loadExercise(dir string) (*Exercise, error) {
+func loadExercise(dir, _ string) (*Exercise, error) {
 	var ex Exercise
 	if err := decodeYAML(filepath.Join(dir, "exercise.yaml"), &ex); err != nil {
 		return nil, err

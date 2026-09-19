@@ -52,7 +52,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	clabBin := binOr(cfg.Containerlab.BinPath, "containerlab")
 	dockerBin := binOr(cfg.Docker.BinPath, "docker")
 
-	lib, err := content.Load(root)
+	lib, err := content.LoadWithLocale(root, locale(errOut))
 	if err != nil {
 		return err
 	}

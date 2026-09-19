@@ -3,10 +3,12 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/tianyuxue/clablings/internal/config"
 	"github.com/tianyuxue/clablings/internal/content"
 )
 
@@ -17,6 +19,26 @@ func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.co
 
 // Version is overridden at build time via -ldflags; defaults to dev.
 var Version = "dev"
+
+var langFlag string
+
+// locale resolves content language: --lang > CLABLINGS_LANG > config.language > en.
+func locale(errOut io.Writer) string {
+	if langFlag != "" {
+		return content.NormalizeLocale(langFlag)
+	}
+	if v := os.Getenv("CLABLINGS_LANG"); v != "" {
+		return content.NormalizeLocale(v)
+	}
+	cfg, err := config.Load()
+	if err != nil && errOut != nil {
+		fmt.Fprintf(errOut, "warning: reading config failed, using defaults: %v\n", err)
+	}
+	if cfg != nil {
+		return content.NormalizeLocale(cfg.Language)
+	}
+	return content.DefaultLocale
+}
 
 // NewRootCmd builds the clablings root command.
 func NewRootCmd() *cobra.Command {
@@ -33,6 +55,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newResetCmd())
 	cmd.AddCommand(newTestCmd())
 	cmd.AddCommand(newDebugCmd())
+	cmd.PersistentFlags().StringVar(&langFlag, "lang", "", "content language: en or zh (default: en)")
 	return cmd
 }
 
