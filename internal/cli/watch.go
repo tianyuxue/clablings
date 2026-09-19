@@ -73,8 +73,12 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		}
 	}
 	if rawActive {
-		out = watch.NewCRLFWriter(out)
-		errOut = watch.NewCRLFWriter(errOut)
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			out = watch.NewCRLFWriter(out)
+		}
+		if term.IsTerminal(int(os.Stderr.Fd())) {
+			errOut = watch.NewCRLFWriter(errOut)
+		}
 	}
 
 	eng := engine.New(clabBin, dockerBin)
@@ -108,11 +112,11 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		return watchLoop(ctx, sess, lib, cfg, keyCh, ticker.C, out, errOut)
 	}
 	printProgress(sess, lib, out)
-	watch.WriteLegend(out)
 	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C, out, errOut)
 }
 
 func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, keyCh <-chan watch.Key, tick <-chan time.Time, out, errOut io.Writer) error {
+	interactive := keyCh != nil
 	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
 	if _, err := w.Scan(); err != nil {
 		fmt.Fprintf(errOut, "warning: %v\n", err)
@@ -120,11 +124,10 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return handleQuit(ctx, sess, false, out, errOut)
 		case k := <-keyCh:
 			switch k {
 			case watch.KeyEnter:
-				drainKeys(keyCh)
 				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 				if err != nil {
 					return err
@@ -135,31 +138,41 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if next != nil {
 					w = next
 				}
-				watch.WriteLegend(out)
+				if quit, clean := drainKeys(keyCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
+				}
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			case watch.KeyHint:
 				watch.WriteHints(out, sess.Current())
-				watch.WriteLegend(out)
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			case watch.KeyRedeploy:
-				drainKeys(keyCh)
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
 				}
-				watch.WriteLegend(out)
+				if quit, clean := drainKeys(keyCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
+				}
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			case watch.KeyFastReset:
-				drainKeys(keyCh)
 				if err := sess.ResetCurrent(ctx, false); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
 				}
-				watch.WriteLegend(out)
-			case watch.KeyQuit:
-				fmt.Fprintln(out, "containers kept running; press x to clean up")
-				return nil
-			case watch.KeyCleanQuit:
-				if err := sess.Cleanup(ctx); err != nil {
-					fmt.Fprintf(errOut, "cleanup error: %v\n", err)
-					return err
+				if quit, clean := drainKeys(keyCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
 				}
-				return nil
+				if interactive {
+					watch.WriteLegend(out)
+				}
+			case watch.KeyQuit:
+				return handleQuit(ctx, sess, false, out, errOut)
+			case watch.KeyCleanQuit:
+				return handleQuit(ctx, sess, true, out, errOut)
 			}
 		case <-tick:
 			if _, err := w.Scan(); err != nil {
@@ -177,17 +190,46 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if next != nil {
 					w = next
 				}
-				watch.WriteLegend(out)
+				if quit, clean := drainKeys(keyCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
+				}
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			}
 		}
 	}
 }
 
-// drainKeys discards keys queued while a blocking action ran.
-func drainKeys(ch <-chan watch.Key) {
+const quitNotice = "containers kept running; press x to clean up"
+
+// handleQuit implements the two exit paths: keep containers (q/Ctrl+C) or
+// remove every chapter first (x).
+func handleQuit(ctx context.Context, sess *watch.Session, clean bool, out, errOut io.Writer) error {
+	if !clean {
+		fmt.Fprintln(out, quitNotice)
+		return nil
+	}
+	if err := sess.Cleanup(ctx); err != nil {
+		fmt.Fprintf(errOut, "cleanup error: %v\n", err)
+		return err
+	}
+	fmt.Fprintln(out, "containers removed")
+	return nil
+}
+
+// drainKeys discards keys buffered during a blocking action and reports whether
+// a quit or clean-quit was requested among them.
+func drainKeys(ch <-chan watch.Key) (quit, cleanQuit bool) {
 	for {
 		select {
-		case <-ch:
+		case k := <-ch:
+			switch k {
+			case watch.KeyQuit:
+				quit = true
+			case watch.KeyCleanQuit:
+				cleanQuit = true
+			}
 		default:
 			return
 		}

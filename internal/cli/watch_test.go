@@ -232,8 +232,9 @@ func TestMakeVerifierTopologyError(t *testing.T) {
 func TestWatchLoopHintAndCleanQuit(t *testing.T) {
 	lib, st := oneExerciseLibrary(t)
 	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
 	sess := watch.New(watch.Options{
-		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
 		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
 			return []assert.Result{{Passed: true}}, nil
 		},
@@ -248,10 +249,42 @@ func TestWatchLoopHintAndCleanQuit(t *testing.T) {
 	keyCh <- watch.KeyCleanQuit
 	tick := make(chan time.Time)
 	var out bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("watchLoop: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchLoop did not return")
+	}
+	if !strings.Contains(out.String(), "check the MTU") {
+		t.Fatalf("out = %q", out.String())
+	}
+	if len(eng.destroyed) != 1 || eng.destroyed[0] != "c1" {
+		t.Fatalf("destroyed = %v, want [c1]", eng.destroyed)
+	}
+}
+
+func TestWatchLoopQuitNotice(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan watch.Key, 1)
+	keyCh <- watch.KeyQuit
+	tick := make(chan time.Time)
+	var out bytes.Buffer
 	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
-	if !strings.Contains(out.String(), "check the MTU") {
+	if !strings.Contains(out.String(), "containers kept running") {
 		t.Fatalf("out = %q", out.String())
 	}
 }
