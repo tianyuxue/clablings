@@ -137,3 +137,56 @@ func TestRunExerciseDispatchesFileAndLink(t *testing.T) {
 		t.Fatalf("results = %+v", results)
 	}
 }
+
+type seqExec struct {
+	calls int
+	fail  int
+}
+
+func (s *seqExec) Exec(_ context.Context, _, _ string) (engine.Result, error) {
+	s.calls++
+	if s.calls <= s.fail {
+		return engine.Result{Code: 1, Stderr: "not yet"}, nil
+	}
+	return engine.Result{Code: 0}, nil
+}
+
+func (s *seqExec) InspectInterfaces(context.Context, string) (map[string][]engine.InspectInterface, error) {
+	return nil, nil
+}
+
+func TestRunExerciseWaitPollsUntilPass(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Assertions: []content.Assertion{
+		{Name: "converges", Type: "exec", Node: "n1", Cmd: "true", Wait: "3s"},
+	}}
+	fe := &seqExec{fail: 1}
+	results := RunExercise(context.Background(), fe, nil, ex)
+	if len(results) != 1 || !results[0].Passed {
+		t.Fatalf("results = %+v (calls=%d)", results, fe.calls)
+	}
+	if fe.calls < 2 {
+		t.Fatalf("expected a retry, calls = %d", fe.calls)
+	}
+}
+
+func TestRunExerciseWaitTimesOut(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Assertions: []content.Assertion{
+		{Name: "never", Type: "exec", Node: "n1", Cmd: "true", Wait: "100ms"},
+	}}
+	fe := &seqExec{fail: 100}
+	results := RunExercise(context.Background(), fe, nil, ex)
+	if len(results) != 1 || results[0].Passed {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
+func TestRunExerciseNoWaitRunsOnce(t *testing.T) {
+	ex := &content.Exercise{ID: "e1", Chapter: "c1", Assertions: []content.Assertion{
+		{Name: "once", Type: "exec", Node: "n1", Cmd: "true"},
+	}}
+	fe := &seqExec{fail: 100}
+	results := RunExercise(context.Background(), fe, nil, ex)
+	if results[0].Passed || fe.calls != 1 {
+		t.Fatalf("calls = %d results = %+v", fe.calls, results)
+	}
+}

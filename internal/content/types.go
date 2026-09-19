@@ -56,6 +56,7 @@ type Assertion struct {
 	Layer   string `yaml:"layer"`
 	Node    string `yaml:"node"`
 	Timeout string `yaml:"timeout"`
+	Wait    string `yaml:"wait"`
 	Hint    string `yaml:"-"`
 
 	// exec
