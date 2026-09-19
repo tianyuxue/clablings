@@ -40,7 +40,6 @@ func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res wat
 			}
 			continue
 		}
-		freshChapter := false
 		if current == nil || current.ID != ex.ChapterRef.ID {
 			if current != nil {
 				if err := eng.Destroy(ctx, current); err != nil {
@@ -51,16 +50,10 @@ func RunAll(ctx context.Context, lib *content.Library, eng watch.Engine, res wat
 				return err
 			}
 			current = ex.ChapterRef
-			freshChapter = true
 		}
-		var resetErr error
-		if freshChapter {
-			resetErr = res.Fast(ctx, ex) // freshly deployed; fast path is enough
-		} else {
-			resetErr = res.Hard(ctx, ex) // hard reset between exercises for a clean state
-		}
-		if resetErr != nil {
-			return resetErr
+		// Always hard reset: a reused lab may carry state from a previous run.
+		if err := res.Hard(ctx, ex); err != nil {
+			return err
 		}
 		results, err := verify(ctx, ex)
 		if err != nil {

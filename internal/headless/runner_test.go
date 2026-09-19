@@ -71,11 +71,11 @@ func TestRunAllDeploysPerChapterAndHardResets(t *testing.T) {
 	if len(fe.destroyed) != 2 || fe.destroyed[0] != "c1" || fe.destroyed[1] != "c2" {
 		t.Fatalf("destroyed = %v", fe.destroyed)
 	}
-	if len(fr.fast) != 2 || fr.fast[0] != "c1/e1" || fr.fast[1] != "c2/e3" {
-		t.Fatalf("fast resets = %v", fr.fast)
+	if len(fr.fast) != 0 {
+		t.Fatalf("fast resets = %v, want none", fr.fast)
 	}
-	if len(fr.hard) != 1 || fr.hard[0] != "c1/e2" {
-		t.Fatalf("hard resets = %v", fr.hard)
+	if len(fr.hard) != 3 {
+		t.Fatalf("hard resets = %v, want 3", fr.hard)
 	}
 	if got[1] != "report:c1/e1" || !slices.Contains(got, "report:c1/e2") || !slices.Contains(got, "report:c2/e3") {
 		t.Fatalf("report order = %v", got)

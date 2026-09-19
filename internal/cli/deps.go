@@ -34,12 +34,17 @@ func (a *lifecycleAdapter) Deploy(ctx context.Context, ch *content.Chapter) erro
 		if err != nil {
 			return fmt.Errorf("chapter %s: %w", ch.ID, err)
 		}
-		res, err := a.eng.Deploy(dctx, topo, engine.ChapterDeployTimeout(ch))
-		if err != nil {
-			return err
-		}
-		if res.Code != 0 {
-			return fmt.Errorf("containerlab deploy failed (code=%d): %s", res.Code, res.Stderr)
+		// Reuse an already-running lab so runtime changes survive a watch restart
+		// (q keeps containers; x cleans up).
+		running, rerr := a.eng.LabRunning(dctx, ch.LabName)
+		if rerr != nil || !running {
+			res, err := a.eng.Deploy(dctx, topo, engine.ChapterDeployTimeout(ch))
+			if err != nil {
+				return err
+			}
+			if res.Code != 0 {
+				return fmt.Errorf("containerlab deploy failed (code=%d): %s", res.Code, res.Stderr)
+			}
 		}
 	}
 	if err := engine.RunHostCommands(dctx, ch.Setup); err != nil {

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,22 @@ func (e *Engine) Runner() Runner { return e.runner }
 
 func (e *Engine) Deploy(ctx context.Context, topoPath string, timeout time.Duration) (Result, error) {
 	return e.runner.Run(ctx, e.clabBin, "deploy", "-t", topoPath, "--timeout", timeout.String())
+}
+
+// LabRunning reports whether any container of the lab is already running, so a
+// caller can reuse an existing lab instead of recreating (and wiping) it.
+func (e *Engine) LabRunning(ctx context.Context, labName string) (bool, error) {
+	if labName == "" {
+		return false, nil
+	}
+	res, err := e.runner.Run(ctx, e.dockerBin, "ps", "--filter", "name=^clab-"+labName+"-", "--format", "{{.Names}}")
+	if err != nil {
+		return false, err
+	}
+	if res.Code != 0 {
+		return false, fmt.Errorf("docker ps failed (code=%d): %s", res.Code, res.Stderr)
+	}
+	return strings.TrimSpace(res.Stdout) != "", nil
 }
 
 func (e *Engine) Destroy(ctx context.Context, topoPath string) (Result, error) {

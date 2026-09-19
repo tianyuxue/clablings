@@ -103,3 +103,25 @@ func TestEnginePropagatesRunnerError(t *testing.T) {
 		t.Fatalf("err = %v, want sentinel", err)
 	}
 }
+
+func TestEngineLabRunning(t *testing.T) {
+	fr := &fakeRunner{results: []Result{{Code: 0, Stdout: "clab-x-r1\nclab-x-r2\n"}}}
+	e := NewWithRunner(fr, "containerlab", "docker")
+	running, err := e.LabRunning(context.Background(), "x")
+	if err != nil || !running {
+		t.Fatalf("running=%v err=%v calls=%v", running, err, fr.calls)
+	}
+	want := []string{"docker", "ps", "--filter", "name=^clab-x-", "--format", "{{.Names}}"}
+	if !reflect.DeepEqual(fr.calls[0], want) {
+		t.Fatalf("calls[0] = %v, want %v", fr.calls[0], want)
+	}
+
+	fr2 := &fakeRunner{results: []Result{{Code: 0, Stdout: "\n"}}}
+	e2 := NewWithRunner(fr2, "containerlab", "docker")
+	if running, err := e2.LabRunning(context.Background(), "x"); err != nil || running {
+		t.Fatalf("running=%v err=%v", running, err)
+	}
+	if running, err := e2.LabRunning(context.Background(), ""); err != nil || running {
+		t.Fatalf("empty lab: running=%v err=%v", running, err)
+	}
+}

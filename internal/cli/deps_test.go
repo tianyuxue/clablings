@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -41,5 +43,38 @@ func TestLifecycleAdapterNoTopologyRunsSetup(t *testing.T) {
 	}
 	if len(fr.calls) != 0 {
 		t.Fatalf("engine calls = %v, want none", fr.calls)
+	}
+}
+
+type psRunner struct {
+	calls [][]string
+	out   string
+}
+
+func (r *psRunner) Run(_ context.Context, name string, args ...string) (engine.Result, error) {
+	r.calls = append(r.calls, append([]string{name}, args...))
+	if name == "docker" && len(args) > 0 && args[0] == "ps" {
+		return engine.Result{Code: 0, Stdout: r.out}, nil
+	}
+	return engine.Result{}, nil
+}
+
+func TestLifecycleAdapterReusesRunningLab(t *testing.T) {
+	dir := t.TempDir()
+	topo := filepath.Join(dir, "topology.clab.yml")
+	if err := os.WriteFile(topo, []byte("name: x\ntopology:\n  nodes: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fr := &psRunner{out: "clab-x-r1\n"}
+	eng := engine.NewWithRunner(fr, "containerlab", "docker")
+	a := newLifecycleAdapter(eng)
+	ch := &content.Chapter{ID: "c1", TopologyPath: topo, LabName: "x"}
+	if err := a.Deploy(context.Background(), ch); err != nil {
+		t.Fatalf("Deploy: %v", err)
+	}
+	for _, c := range fr.calls {
+		if len(c) > 1 && c[0] == "containerlab" && c[1] == "deploy" {
+			t.Fatalf("must not redeploy a running lab: %v", fr.calls)
+		}
 	}
 }
