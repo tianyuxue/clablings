@@ -86,9 +86,22 @@ type exerciseYAML struct {
 	Title      localizedString   `yaml:"title"`
 	Hints      []localizedString `yaml:"hints"`
 	Assertions []assertionYAML   `yaml:"assertions"`
+	Questions  []questionYAML    `yaml:"questions"`
 	Difficulty int               `yaml:"difficulty"`
 	Tags       []string          `yaml:"tags"`
 	Exercise   `yaml:",inline"`
+}
+
+type optionYAML struct {
+	Text        localizedString `yaml:"text"`
+	Explanation localizedString `yaml:"explanation"`
+	Correct     bool            `yaml:"correct"`
+}
+
+type questionYAML struct {
+	Prompt   localizedString `yaml:"prompt"`
+	Multiple bool            `yaml:"multiple"`
+	Options  []optionYAML    `yaml:"options"`
 }
 
 // assertionYAML is the on-disk shape of a single assertion.

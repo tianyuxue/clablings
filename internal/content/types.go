@@ -14,7 +14,22 @@ type ExerciseType string
 const (
 	TypeConfigFix     ExerciseType = "config-fix"
 	TypeCodeImplement ExerciseType = "code-implement"
+	TypeQuiz          ExerciseType = "quiz"
 )
+
+// Option is one quiz answer option.
+type Option struct {
+	Text        string
+	Explanation string
+	Correct     bool
+}
+
+// Question is one quiz question.
+type Question struct {
+	Prompt   string
+	Multiple bool
+	Options  []Option
+}
 
 // FileMapping maps an editable host file to a node target path.
 type FileMapping struct {
@@ -133,6 +148,7 @@ type Exercise struct {
 	Build      *BuildSpec    `yaml:"build"`
 	Run        *RunSpec      `yaml:"run"`
 	Assertions []Assertion   `yaml:"-"`
+	Questions  []Question    `yaml:"-"`
 
 	Difficulty int      `yaml:"-"`
 	Tags       []string `yaml:"-"`

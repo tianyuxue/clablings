@@ -149,16 +149,60 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 			ex.Assertions[i].Hint = dto.Assertions[i].Hint.resolve(locale)
 		}
 	}
+	if len(dto.Questions) > 0 {
+		ex.Questions = make([]Question, len(dto.Questions))
+		for i := range dto.Questions {
+			q := Question{
+				Prompt:   dto.Questions[i].Prompt.resolve(locale),
+				Multiple: dto.Questions[i].Multiple,
+			}
+			if n := len(dto.Questions[i].Options); n > 0 {
+				q.Options = make([]Option, n)
+				for j := range dto.Questions[i].Options {
+					o := dto.Questions[i].Options[j]
+					q.Options[j] = Option{
+						Text:        o.Text.resolve(locale),
+						Explanation: o.Explanation.resolve(locale),
+						Correct:     o.Correct,
+					}
+				}
+			}
+			ex.Questions[i] = q
+		}
+	}
 	if ex.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)
 	}
 	switch ex.Type {
-	case TypeConfigFix, TypeCodeImplement:
+	case TypeConfigFix, TypeCodeImplement, TypeQuiz:
 	default:
 		return nil, fmt.Errorf("exercise %s: invalid type %q", ex.ID, ex.Type)
 	}
 	if ex.Type == TypeCodeImplement && (ex.Build == nil || ex.Run == nil) {
 		return nil, fmt.Errorf("exercise %s: code-implement requires build and run", ex.ID)
+	}
+	if ex.Type == TypeQuiz {
+		if len(ex.Questions) == 0 {
+			return nil, fmt.Errorf("exercise %s: quiz requires at least one question", ex.ID)
+		}
+		for qi := range ex.Questions {
+			q := &ex.Questions[qi]
+			if len(q.Options) < 2 {
+				return nil, fmt.Errorf("exercise %s: question %d needs at least two options", ex.ID, qi+1)
+			}
+			correct := 0
+			for _, o := range q.Options {
+				if o.Correct {
+					correct++
+				}
+			}
+			if correct == 0 {
+				return nil, fmt.Errorf("exercise %s: question %d needs a correct option", ex.ID, qi+1)
+			}
+			if !q.Multiple && correct != 1 {
+				return nil, fmt.Errorf("exercise %s: question %d single-choice question must have exactly one correct option", ex.ID, qi+1)
+			}
+		}
 	}
 	ex.Dir = dir
 	return &ex, nil
