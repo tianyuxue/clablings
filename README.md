@@ -7,9 +7,10 @@ clablings watch [--root DIR]        # watch mode
 clablings run <exercise_id>         # jump to an exercise
 clablings reset [--hard]            # fast / hard reset
 clablings list [--json]             # progress
-clablings test [<id>|--all] [--format text|json]  # headless verification
+clablings test [<id>|--all] [--answers FILE] [--format text|json]  # headless verification
 clablings debug [--sudo] [--root DIR] # launch clab-tui on this chapter's shared topology
 clablings read [<chapter_id>] [--lang en|zh] # concept + RFC reading slices
+clablings lint [--root DIR]          # validate the library
 ```
 
 The exercise library lives at the repository root `clab-exercises/`; see
