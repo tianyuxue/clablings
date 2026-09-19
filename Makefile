@@ -3,13 +3,14 @@ PKG=github.com/tianyuxue/clablings
 GOBUILD=go build
 GOTEST=go test
 DIST=dist
-PREFIX?=/usr/local
+PREFIX?=$(HOME)/.local
+BINDIR=$(DESTDIR)$(PREFIX)/bin
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS=-X $(PKG)/internal/cli.Version=$(VERSION)
 STATIC_LDFLAGS=$(LDFLAGS) -s -w
 PLATFORMS?=linux/amd64 linux/arm64
 
-.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install package clean distclean help
+.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install uninstall package clean distclean help
 
 all: fmt vet test build
 
@@ -48,8 +49,13 @@ run: build
 	./$(BINARY) $(ARGS)
 
 install: build
-	install -d $(DESTDIR)$(PREFIX)/bin
-	install -m 0755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/$(BINARY)
+	@mkdir -p $(BINDIR)
+	install -m 0755 $(BINARY) $(BINDIR)/$(BINARY)
+	@echo "installed $(BINDIR)/$(BINARY)"
+
+uninstall:
+	rm -f $(BINDIR)/$(BINARY)
+	@echo "removed $(BINDIR)/$(BINARY)"
 
 # Cross-compile and package as tar.gz + checksums.txt.
 package: distclean
@@ -81,6 +87,7 @@ help:
 	@echo "  fmt              go fmt"
 	@echo "  tidy             go mod tidy"
 	@echo "  run              make run ARGS=\"list --root ../clab-exercises\""
-	@echo "  install          install to \$$PREFIX/bin (default /usr/local)"
+	@echo "  install          install to \$$HOME/.local/bin (override PREFIX/DESTDIR)"
+	@echo "  uninstall        remove installed binary"
 	@echo "  package          cross-compile and package tar.gz + checksums ($(PLATFORMS))"
 	@echo "  clean/distclean  clean up"
