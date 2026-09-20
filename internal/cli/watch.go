@@ -430,7 +430,15 @@ func printBrief(out io.Writer, brief string) {
 		buf.Reset()
 		buf.WriteString(strings.TrimRight(brief, "\n"))
 	}
-	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	lines := strings.Split(buf.String(), "\n")
+	// glamour wraps the paragraph in blank lines; drop them so the marker sits
+	// on the first line of text.
+	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
 	for i, ln := range lines {
 		ln = strings.TrimRight(ln, " ")
 		if i == 0 {
