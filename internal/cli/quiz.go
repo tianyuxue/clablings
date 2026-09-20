@@ -36,10 +36,10 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 		return false
 	}
 	answers := make([][]int, len(ex.Questions))
+	fmt.Fprintln(out, dim("Answer with option numbers; multi-select like 1,3. h hint, c concept, p prev, n next, q quit."))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
 		for {
-			fmt.Fprintln(out, dim("(numbers; multi-select like 1,3; h hint, c concept, p prev, n next, q quit)"))
 			fmt.Fprintf(out, "\n%s %s\n", bold(cyan(fmt.Sprintf("Q%d:", qi+1))), q.Prompt)
 			for oi := range q.Options {
 				fmt.Fprintf(out, "  %d) %s\n", oi+1, q.Options[oi].Text)
@@ -51,7 +51,6 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 			fmt.Fprintf(out, "%s> ", prompt)
 			line, err := readQuizLine(ctx, in, out, help)
 			if errors.Is(err, errQuizHelp) {
-				fmt.Fprintln(out)
 				continue
 			}
 			if err != nil {
