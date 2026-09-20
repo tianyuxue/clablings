@@ -211,10 +211,21 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				continue
 			}
 			if vch != nil {
-				// While verifying, Esc cancels; q/x cancel and then quit.
-				switch {
-				case b == 0x1b:
+				// While verifying, Esc cancels; q/x cancel and then quit. A
+				// leading ESC may also begin an ANSI sequence (arrow keys),
+				// which is consumed and ignored rather than treated as cancel.
+				if b == 0x1b {
+					follow, seq := classifyEsc(byteCh)
+					if seq {
+						continue
+					}
 					vcancel()
+					if follow < 0 {
+						continue
+					}
+					b = byte(follow)
+				}
+				switch {
 				case b == 'q' || b == 'Q' || b == 0x03:
 					pendingQuit = true
 					vcancel()
@@ -417,4 +428,41 @@ func usesFileTrigger(ex *content.Exercise) bool {
 		}
 	}
 	return false
+}
+
+// classifyEsc inspects the bytes that follow a leading ESC. It reports seq=true
+// when they form an ANSI escape sequence (arrow and function keys), consuming
+// them so they are ignored. Otherwise it returns the byte that followed a bare
+// Esc (-1 when none arrived within the window) so the caller can handle it.
+func classifyEsc(ch <-chan byte) (follow int, seq bool) {
+	nb, ok := recvByte(ch, 50*time.Millisecond)
+	if !ok {
+		return -1, false
+	}
+	switch nb {
+	case '[':
+		for {
+			fb, ok := recvByte(ch, 50*time.Millisecond)
+			if !ok {
+				return -1, true
+			}
+			if fb >= 0x40 && fb <= 0x7e {
+				return -1, true
+			}
+		}
+	case 'O':
+		_, _ = recvByte(ch, 50*time.Millisecond)
+		return -1, true
+	default:
+		return int(nb), false
+	}
+}
+
+func recvByte(ch <-chan byte, d time.Duration) (byte, bool) {
+	select {
+	case b, ok := <-ch:
+		return b, ok
+	case <-time.After(d):
+		return 0, false
+	}
 }

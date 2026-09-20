@@ -588,3 +588,37 @@ func TestWatchLoopEscCancelsVerify(t *testing.T) {
 		t.Fatalf("canceled verification must not complete the exercise: %q", out.String())
 	}
 }
+
+func TestClassifyEsc(t *testing.T) {
+	t.Run("bare esc", func(t *testing.T) {
+		ch := make(chan byte)
+		follow, seq := classifyEsc(ch)
+		if seq || follow != -1 {
+			t.Fatalf("follow=%d seq=%v, want bare esc", follow, seq)
+		}
+	})
+	t.Run("csi arrow", func(t *testing.T) {
+		ch := make(chan byte, 2)
+		ch <- '['
+		ch <- 'A'
+		if _, seq := classifyEsc(ch); !seq {
+			t.Fatal("ESC [ A must be an escape sequence")
+		}
+	})
+	t.Run("ss3 arrow", func(t *testing.T) {
+		ch := make(chan byte, 2)
+		ch <- 'O'
+		ch <- 'B'
+		if _, seq := classifyEsc(ch); !seq {
+			t.Fatal("ESC O B must be an escape sequence")
+		}
+	})
+	t.Run("esc then key", func(t *testing.T) {
+		ch := make(chan byte, 1)
+		ch <- 'q'
+		follow, seq := classifyEsc(ch)
+		if seq || follow != 'q' {
+			t.Fatalf("follow=%d seq=%v, want 'q'", follow, seq)
+		}
+	})
+}
