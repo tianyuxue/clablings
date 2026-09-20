@@ -84,6 +84,7 @@ type chapterYAML struct {
 // exerciseYAML is the on-disk shape of exercise.yaml.
 type exerciseYAML struct {
 	Title      localizedString   `yaml:"title"`
+	Brief      localizedString   `yaml:"brief"`
 	Hints      []localizedString `yaml:"hints"`
 	Assertions []assertionYAML   `yaml:"assertions"`
 	Questions  []questionYAML    `yaml:"questions"`

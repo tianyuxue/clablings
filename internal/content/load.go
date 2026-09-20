@@ -139,6 +139,7 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 	}
 	ex := dto.Exercise
 	ex.Title = dto.Title.resolve(locale)
+	ex.Brief = dto.Brief.resolve(locale)
 	ex.Hints = resolveStrings(dto.Hints, locale)
 	ex.Difficulty = dto.Difficulty
 	ex.Tags = dto.Tags

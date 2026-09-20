@@ -140,6 +140,7 @@ func (c *Chapter) HasTopology() bool { return c.TopologyPath != "" }
 type Exercise struct {
 	ID         string        `yaml:"id"`
 	Title      string        `yaml:"-"`
+	Brief      string        `yaml:"-"`
 	Type       ExerciseType  `yaml:"type"`
 	Timeout    string        `yaml:"timeout"`
 	Files      []FileMapping `yaml:"files"`

@@ -22,6 +22,7 @@ The exercise library lives at the repository root `clab-exercises/`; see
 - `Enter` verify the current exercise
 - `h` show hints
 - `c` show the chapter's concept and RFC reading slices
+- `p` / `n` go to the previous / next exercise (no status change)
 - `r` / `f` hard / fast reset
 - `q` quit (keep containers)
 - `x` quit and destroy containers

@@ -114,7 +114,7 @@ func TestLoadWithLocaleResolvesAndFallsBack(t *testing.T) {
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
 		"chapters/c1/chapter.yaml":               "id: c1\ntitle:\n  en: Switching\n  zh: 交换\ntopology: topology.clab.yml\n",
 		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
-		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ntitle: Plain title\nhints:\n  - en: an english hint\n    zh: 一条中文线索\n  - scalar hint\nassertions:\n  - name:\n      en: neighbor up\n      zh: 邻居 up\n    type: exec\n    node: n1\n    cmd: \"true\"\n    hint: only english\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ntitle: Plain title\nbrief: {en: Do the thing, zh: 做这件事}\nhints:\n  - en: an english hint\n    zh: 一条中文线索\n  - scalar hint\nassertions:\n  - name:\n      en: neighbor up\n      zh: 邻居 up\n    type: exec\n    node: n1\n    cmd: \"true\"\n    hint: only english\n",
 	})
 
 	lib, err := LoadWithLocale(root, "zh")
@@ -128,6 +128,9 @@ func TestLoadWithLocaleResolvesAndFallsBack(t *testing.T) {
 	}
 	if ex.Title != "Plain title" {
 		t.Fatalf("exercise title = %q", ex.Title)
+	}
+	if ex.Brief != "做这件事" {
+		t.Fatalf("exercise brief = %q", ex.Brief)
 	}
 	if len(ex.Hints) != 2 || ex.Hints[0] != "一条中文线索" || ex.Hints[1] != "scalar hint" {
 		t.Fatalf("hints = %v", ex.Hints)

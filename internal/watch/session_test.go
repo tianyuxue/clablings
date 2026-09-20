@@ -455,3 +455,29 @@ func TestSessionQuizDoesNotDeployChapter(t *testing.T) {
 		t.Fatalf("lab exercise should deploy the chapter: %v", fe.deployed)
 	}
 }
+
+func TestSessionStepMovesWithoutPassing(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.Step(context.Background(), 1); err != nil || !ok {
+		t.Fatalf("step next: ok=%v err=%v", ok, err)
+	}
+	if s.Current().FullID() != "c1/e2" {
+		t.Fatalf("current = %v", s.Current())
+	}
+	if es := st.Get("c1/e1"); es.Status == state.StatusPassed {
+		t.Fatal("Step must not mark the previous exercise passed")
+	}
+	if ok, err := s.Step(context.Background(), -1); err != nil || !ok {
+		t.Fatalf("step prev: ok=%v err=%v", ok, err)
+	}
+	if s.Current().FullID() != "c1/e1" {
+		t.Fatalf("current = %v", s.Current())
+	}
+}

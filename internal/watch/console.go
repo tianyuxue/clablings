@@ -47,5 +47,9 @@ func WriteHints(w io.Writer, ex *content.Exercise) {
 
 // WriteLegend prints the watch hot-key legend.
 func WriteLegend(w io.Writer) {
-	fmt.Fprintln(w, "[Enter] verify  [h] hint  [c] concept  [r] redeploy  [f] fast reset  [q] quit  [x] clean quit")
+	fmt.Fprintln(w, "[Enter] verify")
+	fmt.Fprintln(w, "[h] hint   [c] concept")
+	fmt.Fprintln(w, "[p] prev   [n] next")
+	fmt.Fprintln(w, "[r] redeploy   [f] fast reset")
+	fmt.Fprintln(w, "[q] quit   [x] clean quit   [Ctrl+C] quit")
 }

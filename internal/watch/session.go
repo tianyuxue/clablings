@@ -112,6 +112,29 @@ func (s *Session) ResetCurrent(ctx context.Context, hard bool) error {
 	return nil
 }
 
+// Step moves to the adjacent exercise (delta -1 or +1) and loads it, without
+// changing any pass/fail status. It returns false at the ends of the library.
+func (s *Session) Step(ctx context.Context, delta int) (bool, error) {
+	if s.current == nil {
+		return false, nil
+	}
+	idx := -1
+	for i, ex := range s.opts.Library.Order {
+		if ex.FullID() == s.current.FullID() {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false, nil
+	}
+	target := idx + delta
+	if target < 0 || target >= len(s.opts.Library.Order) {
+		return false, nil
+	}
+	return true, s.activate(ctx, s.opts.Library.Order[target])
+}
+
 // Cleanup destroys every chapter in the library (best-effort, idempotent).
 func (s *Session) Cleanup(ctx context.Context) error {
 	var errs []error

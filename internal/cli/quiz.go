@@ -45,7 +45,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 				watch.WriteLegend(out)
 			}
 			redraw = false
-			fmt.Fprintln(out, "(enter option numbers; multi-select like 1,3; h hint, c concept, q quit)")
+			fmt.Fprintln(out, "(numbers; multi-select like 1,3; h hint, c concept, p prev, n next, q quit)")
 			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
 			for oi := range q.Options {
 				fmt.Fprintf(out, "  %d) %s\n", oi+1, q.Options[oi].Text)
@@ -112,6 +112,14 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 			if b == 'q' || b == 'Q' {
 				fmt.Fprintln(out)
 				return "", watch.ErrQuizAborted
+			}
+			if b == 'n' || b == 'N' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizNext
+			}
+			if b == 'p' || b == 'P' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizPrev
 			}
 			if help != nil && (b == 'h' || b == 'H' || b == 'c' || b == 'C') {
 				if help(b) {

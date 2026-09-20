@@ -493,3 +493,29 @@ func TestVerifyAndReloadNonQuizCancelIsNotAbort(t *testing.T) {
 		t.Fatalf("non-quiz cancellation reported as quiz abort:\n%s", out.String())
 	}
 }
+
+func TestWatchLoopNavigationAtEnd(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return []assert.Result{{Passed: true}}, nil
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 2)
+	keyCh <- 'n'
+	keyCh <- 'q'
+	tick := make(chan time.Time)
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if !strings.Contains(out.String(), "no exercise in that direction") {
+		t.Fatalf("out = %q", out.String())
+	}
+}

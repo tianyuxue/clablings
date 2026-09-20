@@ -12,6 +12,13 @@ var ErrQuizAborted = errors.New("quiz aborted")
 // handler (e.g. non-TTY runs).
 var ErrQuizUnsupported = errors.New("interactive quiz not supported")
 
+// ErrQuizNext / ErrQuizPrev are returned when the user asks to navigate away
+// from an interactive quiz.
+var (
+	ErrQuizNext = errors.New("quiz navigate next")
+	ErrQuizPrev = errors.New("quiz navigate previous")
+)
+
 // Key is a recognized watch key press.
 type Key int
 
@@ -23,6 +30,8 @@ const (
 	KeyQuit
 	KeyCleanQuit
 	KeyConcept
+	KeyNext
+	KeyPrev
 )
 
 // KeyFor maps a byte to a Key; ok is false for unmapped bytes.
@@ -42,6 +51,10 @@ func KeyFor(b byte) (Key, bool) {
 		return KeyCleanQuit, true
 	case 'c', 'C':
 		return KeyConcept, true
+	case 'n', 'N':
+		return KeyNext, true
+	case 'p', 'P':
+		return KeyPrev, true
 	}
 	return 0, false
 }

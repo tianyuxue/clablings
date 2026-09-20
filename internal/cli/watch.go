@@ -202,6 +202,27 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if interactive {
 					watch.WriteLegend(out)
 				}
+			case watch.KeyNext, watch.KeyPrev:
+				delta := 1
+				if k == watch.KeyPrev {
+					delta = -1
+				}
+				next, done, err := navigate(ctx, sess, lib, cfg, delta, out, errOut)
+				if err != nil {
+					return err
+				}
+				if done {
+					return nil
+				}
+				if next != nil {
+					w = next
+				}
+				if quit, clean := drainKeys(byteCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
+				}
+				if interactive {
+					watch.WriteLegend(out)
+				}
 			case watch.KeyRedeploy:
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
@@ -316,6 +337,13 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 		if errors.Is(err, watch.ErrQuizUnsupported) {
 			return nil, false, err
 		}
+		if errors.Is(err, watch.ErrQuizNext) || errors.Is(err, watch.ErrQuizPrev) {
+			delta := 1
+			if errors.Is(err, watch.ErrQuizPrev) {
+				delta = -1
+			}
+			return navigate(ctx, sess, lib, cfg, delta, out, errOut)
+		}
 		fmt.Fprintf(errOut, "verify error: %v\n", err)
 		return nil, false, nil
 	}
@@ -346,4 +374,25 @@ func printProgress(sess *watch.Session, lib *content.Library, out io.Writer) {
 	}
 	name := filepath.Base(cur.Dir)
 	fmt.Fprintf(out, "[%d/%d] %s: In Progress\n", idx, total, name)
+	if cur.Brief != "" {
+		_ = renderMarkdown(out, cur.Brief+"\n")
+	}
+}
+
+// navigate moves to the adjacent exercise and returns a watcher for it.
+func navigate(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, delta int, out, errOut io.Writer) (*watch.Watcher, bool, error) {
+	ok, err := sess.Step(ctx, delta)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		fmt.Fprintln(out, "no exercise in that direction")
+		return nil, false, nil
+	}
+	printProgress(sess, lib, out)
+	nw := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
+	if _, err := nw.Scan(); err != nil {
+		fmt.Fprintf(errOut, "warning: %v\n", err)
+	}
+	return nw, false, nil
 }
