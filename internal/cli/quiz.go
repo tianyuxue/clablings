@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/tianyuxue/clablings/internal/assert"
 	"github.com/tianyuxue/clablings/internal/content"
@@ -79,8 +80,9 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 // skipped.
 func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool) (string, error) {
 	var buf []byte
-	esc := false // saw ESC
-	csi := false // inside ESC [ ... sequence
+	var pending []byte // bytes of an incomplete UTF-8 rune
+	esc := false       // saw ESC
+	csi := false       // inside ESC [ ... sequence
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,16 +137,48 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 					fmt.Fprint(out, "\b \b")
 				}
 			default:
-				if (b >= '0' && b <= '9') || b == ',' || b == ' ' {
-					buf = append(buf, b)
-					fmt.Fprintf(out, "%c", b)
+				pending = append(pending, b)
+				if !utf8.FullRune(pending) {
+					continue
 				}
+				r, size := utf8.DecodeRune(pending)
+				pending = pending[size:]
+				c, ok := normalizeAnswerRune(r)
+				if !ok {
+					continue
+				}
+				buf = append(buf, c)
+				fmt.Fprintf(out, "%c", c)
 			}
 		}
 	}
 }
 
+// normalizeAnswerRune maps an input rune to the ASCII character used by quiz
+// answers. Besides ASCII digits, comma, and space, it accepts the full-width
+// forms a CJK input method produces (，、　 and ０-９) so multiple-choice answers
+// still parse when typed with a Chinese IME.
+func normalizeAnswerRune(r rune) (byte, bool) {
+	switch {
+	case r >= '0' && r <= '9':
+		return byte(r), true
+	case r >= '０' && r <= '９':
+		return byte(r-'０') + '0', true
+	case r == ',' || r == '，' || r == '、':
+		return ',', true
+	case r == ' ' || r == '\u3000':
+		return ' ', true
+	}
+	return 0, false
+}
+
 func parseChoices(line string, n int, multiple bool) ([]int, error) {
+	line = strings.Map(func(r rune) rune {
+		if c, ok := normalizeAnswerRune(r); ok {
+			return rune(c)
+		}
+		return r
+	}, line)
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return nil, fmt.Errorf("choose an option")

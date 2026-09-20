@@ -154,3 +154,26 @@ func TestReadQuizLineIgnoresLetters(t *testing.T) {
 		t.Fatalf("letters were echoed: %q", out.String())
 	}
 }
+
+func TestReadQuizLineAcceptsFullWidth(t *testing.T) {
+	// Full-width "１，２" (CJK IME) must normalize to ASCII "1,2".
+	var out bytes.Buffer
+	line, err := readQuizLine(context.Background(), feed("１，２\n"), &out, nil)
+	if err != nil || line != "1,2" {
+		t.Fatalf("line=%q err=%v", line, err)
+	}
+}
+
+func TestRunQuizMultiSelectFullWidth(t *testing.T) {
+	var out bytes.Buffer
+	results, err := runQuiz(context.Background(), feed("１、３\n"), &out, multiSelectQuiz(), "en")
+	if err != nil || !results[0].Passed {
+		t.Fatalf("results=%+v err=%v", results, err)
+	}
+}
+
+func TestParseChoicesFullWidth(t *testing.T) {
+	if got, err := parseChoices("１，３", 3, true); err != nil || len(got) != 2 || got[0] != 0 || got[1] != 2 {
+		t.Fatalf("full-width = %v, %v", got, err)
+	}
+}
