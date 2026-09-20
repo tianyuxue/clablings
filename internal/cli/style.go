@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -42,4 +43,21 @@ func progressBar(i, n int) string {
 		bar = green(strings.Repeat("#", filled)) + dim(strings.Repeat("-", width-filled))
 	}
 	return fmt.Sprintf("[%s] %d/%d", bar, i, n)
+}
+
+// writeStatus prints an in-place status line on a terminal (so a later
+// clearStatus can replace it) or a plain line otherwise.
+func writeStatus(w io.Writer, s string) {
+	if colorOn() {
+		fmt.Fprint(w, "\r\x1b[K"+s)
+		return
+	}
+	fmt.Fprintln(w, s)
+}
+
+// clearStatus erases the in-place status line written by writeStatus.
+func clearStatus(w io.Writer) {
+	if colorOn() {
+		fmt.Fprint(w, "\r\x1b[K")
+	}
 }

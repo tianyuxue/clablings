@@ -78,6 +78,9 @@ func TestVerifyAndReloadCompletes(t *testing.T) {
 	if !strings.Contains(out.String(), "all exercises complete") {
 		t.Fatalf("out = %q", out.String())
 	}
+	if !strings.Contains(out.String(), "verifying") {
+		t.Fatalf("out = %q, want a verifying status", out.String())
+	}
 }
 
 func TestWatchLoopEnterCompletes(t *testing.T) {
@@ -345,6 +348,9 @@ func TestVerifyAndReloadQuizAborted(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "quiz aborted") {
 		t.Fatalf("out = %q, want aborted notice", out.String())
+	}
+	if strings.Contains(out.String(), "verifying") {
+		t.Fatalf("out = %q, quiz must not print a verifying status", out.String())
 	}
 	if !strings.Contains(out.String(), "containers kept running") {
 		t.Fatalf("out = %q, want container disposition notice", out.String())

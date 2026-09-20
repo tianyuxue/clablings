@@ -101,8 +101,11 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		Reset:   res,
 		Verify:  makeVerifier(eng, builder),
 		Quiz:    quizHandler,
-		Report:  func(r []assert.Result) { report.Text(out, r) },
-		Status:  func(m string) { fmt.Fprintln(out, m) },
+		Report: func(r []assert.Result) {
+			clearStatus(out)
+			report.Text(out, r)
+		},
+		Status: func(m string) { fmt.Fprintln(out, m) },
 	})
 	if initialID != "" {
 		if err := sess.Run(ctx, initialID); err != nil {
@@ -290,7 +293,11 @@ func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 // whole library is complete or the user asked to stop.
 func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (bool, error) {
 	wasQuiz := sess.Current() != nil && sess.Current().Type == content.TypeQuiz
+	if !wasQuiz {
+		writeStatus(out, yellow("→ verifying ..."))
+	}
 	if err := sess.VerifyNow(ctx); err != nil {
+		clearStatus(out)
 		if errors.Is(err, watch.ErrQuizAborted) {
 			fmt.Fprintln(out, "quiz aborted")
 			fmt.Fprintln(out, quitNotice)
