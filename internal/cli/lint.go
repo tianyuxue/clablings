@@ -30,6 +30,12 @@ func newLintCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			parityProblems, parityWarns, err := content.TranslationParity(resolved, "zh")
+			if err != nil {
+				return err
+			}
+			problems = append(problems, parityProblems...)
+			warns = append(warns, parityWarns...)
 			out := cmd.OutOrStdout()
 			for _, p := range problems {
 				fmt.Fprintln(out, "error: "+p)

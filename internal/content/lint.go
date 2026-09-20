@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/tianyuxue/clablings/internal/i18n"
 )
 
 func (l localizedString) has(locale string) bool { return l.Values[locale] != "" }
@@ -71,6 +73,9 @@ func MissingTranslations(root, locale string) ([]string, error) {
 			if missingText(ex.Title, locale) {
 				problems = append(problems, fmt.Sprintf("exercise %s: title missing %s", full, locale))
 			}
+			if missingText(ex.Brief, locale) {
+				problems = append(problems, fmt.Sprintf("exercise %s: brief missing %s", full, locale))
+			}
 			for i, h := range ex.Hints {
 				if missingText(h, locale) {
 					problems = append(problems, fmt.Sprintf("exercise %s: hint %d missing %s", full, i+1, locale))
@@ -100,4 +105,64 @@ func MissingTranslations(root, locale string) ([]string, error) {
 		}
 	}
 	return problems, nil
+}
+
+// TranslationParity checks that a locale's content stays structurally in sync
+// with the default locale: markdown parity for concept files, plus a git-based
+// freshness warning when the source was committed more recently.
+func TranslationParity(root, locale string) (problems, warns []string, err error) {
+	return translationParity(root, locale, i18n.GitLastCommit(root))
+}
+
+func translationParity(root, locale string, last i18n.LastCommit) (problems, warns []string, err error) {
+	locale = NormalizeLocale(locale)
+	manifest, err := loadManifest(filepath.Join(root, ManifestName))
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, rel := range manifest.Chapters {
+		chDir := filepath.Join(root, rel)
+		enPath := filepath.Join(chDir, "concept."+DefaultLocale+".md")
+		locPath := filepath.Join(chDir, "concept."+locale+".md")
+		enData, enOK, err := readIfExists(enPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		locData, locOK, err := readIfExists(locPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch {
+		case !enOK && !locOK:
+			continue
+		case enOK && !locOK:
+			problems = append(problems, fmt.Sprintf("%s: concept.%s.md missing", rel, locale))
+			continue
+		case !enOK && locOK:
+			problems = append(problems, fmt.Sprintf("%s: concept.%s.md missing", rel, DefaultLocale))
+			continue
+		}
+		for _, p := range i18n.MarkdownParity(string(enData), string(locData)) {
+			problems = append(problems, fmt.Sprintf("%s: concept.%s.md %s", rel, locale, p))
+		}
+		stale, comparable, err := i18n.Stale(last, enPath, locPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		if comparable && stale {
+			warns = append(warns, fmt.Sprintf("%s/concept.%s.md may be outdated (concept.%s.md changed more recently)", rel, locale, DefaultLocale))
+		}
+	}
+	return problems, warns, nil
+}
+
+func readIfExists(path string) ([]byte, bool, error) {
+	b, err := os.ReadFile(path)
+	if err == nil {
+		return b, true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	return nil, false, err
 }

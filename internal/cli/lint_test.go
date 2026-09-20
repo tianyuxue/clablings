@@ -232,3 +232,38 @@ func TestLintWaitZeroAllowed(t *testing.T) {
 		t.Fatalf("out = %q", out.String())
 	}
 }
+
+func TestLintConceptParityDrift(t *testing.T) {
+	root := writeLintTree(t, map[string]string{
+		"clablings.yaml":            "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":  "id: c1\ntitle: {en: t, zh: t}\n",
+		"chapters/c1/concept.en.md": "# T\n\n## Terms\n\n```sh\nbridge vlan add dev eth1 vid 10\n```\n",
+		"chapters/c1/concept.zh.md": "# 标题\n\n## 术语\n\n```sh\nbridge vlan add dev eth1 vid 20\n```\n",
+	})
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("expected lint failure for concept drift\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "code block 1") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
+
+func TestLintMissingBriefTranslation(t *testing.T) {
+	root := writeLintTree(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: {en: t, zh: t}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntitle: {en: t, zh: t}\ntype: config-fix\nbrief: {en: only english}\n",
+	})
+	cmd := newLintCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--root", root})
+	_ = cmd.Execute()
+	if !strings.Contains(out.String(), "brief missing zh") {
+		t.Fatalf("out = %q", out.String())
+	}
+}
