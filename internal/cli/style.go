@@ -18,12 +18,13 @@ func ansi(code, s string) string {
 	return "\x1b[" + code + "m" + s + "\x1b[0m"
 }
 
-func bold(s string) string   { return ansi("1", s) }
-func dim(s string) string    { return ansi("2", s) }
-func green(s string) string  { return ansi("32", s) }
-func red(s string) string    { return ansi("31", s) }
-func yellow(s string) string { return ansi("33", s) }
-func cyan(s string) string   { return ansi("36", s) }
+func bold(s string) string    { return ansi("1", s) }
+func dim(s string) string     { return ansi("2", s) }
+func green(s string) string   { return ansi("32", s) }
+func red(s string) string     { return ansi("31", s) }
+func yellow(s string) string  { return ansi("33", s) }
+func cyan(s string) string    { return ansi("36", s) }
+func magenta(s string) string { return ansi("35", s) }
 
 // progressBar renders a rustlings-style bar like "############-------- 4/7".
 func progressBar(i, n int) string {

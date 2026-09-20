@@ -622,3 +622,20 @@ func TestClassifyEsc(t *testing.T) {
 		}
 	})
 }
+
+func TestPrintContextLayout(t *testing.T) {
+	lib, _ := oneExerciseLibrary(t)
+	ex := lib.Order[0]
+	ex.Title = "Fix access VLANs"
+	ex.Brief = "h1 and h2 cannot reach each other. Fix the access VLANs on sw."
+	ex.Type = content.TypeConfigFix
+	ex.Difficulty = 2
+	var out bytes.Buffer
+	printContext(nil, lib, ex, &out)
+	s := out.String()
+	for _, want := range []string{"Progress:", "▌", ex.ID, ex.Title, "config-fix", "★", "☆", "➜", "cannot reach each other", "[Enter] verify"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %q in:\n%s", want, s)
+		}
+	}
+}

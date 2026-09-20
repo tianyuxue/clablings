@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -391,20 +393,52 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 	return false, nil
 }
 
-// printContext renders the once-per-exercise header: progress bar, title,
-// brief, key legend, and a quiz start hint.
+// printContext renders the once-per-exercise header: progress bar, highlighted
+// title, meta line, task brief, key legend, and a quiz start hint.
 func printContext(sess *watch.Session, lib *content.Library, ex *content.Exercise, out io.Writer) {
 	idx, total := position(lib, ex)
-	fmt.Fprintf(out, "%s %s\n", bold("Progress:"), progressBar(idx, total))
-	fmt.Fprintf(out, "%s\n", bold(fmt.Sprintf("%s: %s", ex.ID, ex.Title)))
+	fmt.Fprintf(out, "\n%s %s\n", bold("Progress:"), progressBar(idx, total))
+	fmt.Fprintf(out, " %s %s %s %s\n",
+		cyan("▌"), bold(cyan(ex.ID)), dim("·"), bold(ex.Title))
+	fmt.Fprintf(out, "   %s %s\n", magenta(string(ex.Type)), stars(ex.Difficulty))
 	if ex.Brief != "" {
-		_ = renderMarkdown(out, ex.Brief+"\n")
+		printBrief(out, ex.Brief)
 	}
 	watch.WriteLegend(out)
 	if ex.Type == content.TypeQuiz {
 		fmt.Fprintln(out, dim("Press Enter to start the quiz."))
 	}
 	fmt.Fprintln(out)
+}
+
+// stars renders a difficulty rating such as ★★★☆☆.
+func stars(n int) string {
+	if n < 0 {
+		n = 0
+	}
+	if n > 5 {
+		n = 5
+	}
+	return yellow(strings.Repeat("★", n)) + dim(strings.Repeat("☆", 5-n))
+}
+
+// printBrief renders the exercise task, indented under a yellow marker, so it
+// stands out from the surrounding chrome.
+func printBrief(out io.Writer, brief string) {
+	var buf bytes.Buffer
+	if err := renderMarkdown(&buf, brief+"\n"); err != nil {
+		buf.Reset()
+		buf.WriteString(strings.TrimRight(brief, "\n"))
+	}
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	for i, ln := range lines {
+		ln = strings.TrimRight(ln, " ")
+		if i == 0 {
+			fmt.Fprintf(out, "  %s %s\n", yellow("➜"), ln)
+		} else {
+			fmt.Fprintf(out, "    %s\n", ln)
+		}
+	}
 }
 
 // position returns the 1-based index of ex within the library and its total.
