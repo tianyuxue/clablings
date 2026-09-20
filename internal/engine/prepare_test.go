@@ -3,6 +3,7 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tianyuxue/clablings/internal/content"
@@ -66,6 +67,29 @@ func TestDerivedTopologyPathIsPerInstance(t *testing.T) {
 	b := &content.Chapter{TopologyPath: "/x/topology.clab.yml", LabName: "inst-b"}
 	if DerivedTopologyPath(a) == DerivedTopologyPath(b) {
 		t.Fatalf("paths must differ: %q", DerivedTopologyPath(a))
+	}
+}
+
+func TestPrepareTopologyPreservesNodeGroup(t *testing.T) {
+	dir := t.TempDir()
+	orig := filepath.Join(dir, "topology.clab.yml")
+	src := "name: static\ntopology:\n  nodes:\n    sw:\n      kind: linux\n      group: switch\n    h1:\n      kind: linux\n      group: host\n"
+	if err := os.WriteFile(orig, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ch := &content.Chapter{ID: "c1", TopologyPath: orig, TopologyName: "static", LabName: "inst-static"}
+	got, err := PrepareTopology(ch)
+	if err != nil {
+		t.Fatalf("PrepareTopology: %v", err)
+	}
+	data, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"group: switch", "group: host"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("derived topology dropped %q:\n%s", want, data)
+		}
 	}
 }
 
