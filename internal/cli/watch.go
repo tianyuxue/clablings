@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -117,46 +116,43 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	defer ticker.Stop()
 
 	if rawActive {
-		printProgress(sess, lib, out)
-		watch.WriteLegend(out)
 		return watchLoop(ctx, sess, lib, cfg, loc, byteCh, ticker.C, out, errOut)
 	}
-	printProgress(sess, lib, out)
 	return watchLoop(ctx, sess, lib, cfg, loc, nil, ticker.C, out, errOut)
 }
 
 func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, loc string, byteCh <-chan byte, tick <-chan time.Time, out, errOut io.Writer) error {
-	interactive := byteCh != nil
-	w := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
-	if _, err := w.Scan(); err != nil {
-		fmt.Fprintf(errOut, "warning: %v\n", err)
-	}
-	for {
-		if cur := sess.Current(); cur != nil && cur.Type == content.TypeQuiz {
-			if ctx.Err() != nil {
-				return handleQuit(ctx, sess, false, out, errOut)
-			}
-			next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
-			if err != nil {
-				return err
-			}
-			if done {
-				return nil
-			}
-			if next != nil {
-				w = next
-			}
-			if sess.Current() == cur && ctx.Err() == nil {
-				return fmt.Errorf("quiz %s was not completed", cur.FullID())
-			}
-			if quit, clean := drainKeys(byteCh); quit || clean {
-				return handleQuit(ctx, sess, clean, out, errOut)
-			}
-			if interactive {
-				watch.WriteLegend(out)
-			}
-			continue
+	var w *watch.Watcher
+	shown := ""
+	// refresh prints the context block once per exercise (progress, brief,
+	// legend) and prepares a watcher for it. Actions never reprint it.
+	refresh := func() {
+		cur := sess.Current()
+		if cur == nil || cur.FullID() == shown {
+			return
 		}
+		printContext(sess, lib, cur, out)
+		shown = cur.FullID()
+		w = watch.NewWatcher(cur, cfg.Watch.Debounce)
+		if _, err := w.Scan(); err != nil {
+			fmt.Fprintf(errOut, "warning: %v\n", err)
+		}
+	}
+	after := func(done bool, err error) (bool, error) {
+		if err != nil {
+			return true, err
+		}
+		if done || sess.Current() == nil {
+			return true, nil
+		}
+		if quit, clean := drainKeys(byteCh); quit || clean {
+			return true, handleQuit(ctx, sess, clean, out, errOut)
+		}
+		refresh()
+		return false, nil
+	}
+	refresh()
+	for {
 		select {
 		case <-ctx.Done():
 			return handleQuit(ctx, sess, false, out, errOut)
@@ -171,27 +167,16 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			}
 			switch k {
 			case watch.KeyEnter:
-				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
+				done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 				if err != nil {
 					return err
 				}
-				if done {
-					return nil
-				}
-				if next != nil {
-					w = next
-				}
-				if quit, clean := drainKeys(byteCh); quit || clean {
-					return handleQuit(ctx, sess, clean, out, errOut)
-				}
-				if interactive {
-					watch.WriteLegend(out)
+				stop, qerr := after(done, nil)
+				if stop {
+					return qerr
 				}
 			case watch.KeyHint:
 				watch.WriteHints(out, sess.Current())
-				if interactive {
-					watch.WriteLegend(out)
-				}
 			case watch.KeyConcept:
 				cur := sess.Current()
 				if cur == nil || cur.ChapterRef == nil {
@@ -199,39 +184,26 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				} else if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
 					fmt.Fprintf(errOut, "read error: %v\n", err)
 				}
-				if interactive {
-					watch.WriteLegend(out)
-				}
 			case watch.KeyNext, watch.KeyPrev:
 				delta := 1
 				if k == watch.KeyPrev {
 					delta = -1
 				}
-				next, done, err := navigate(ctx, sess, lib, cfg, delta, out, errOut)
+				ok, err := sess.Step(ctx, delta)
 				if err != nil {
 					return err
 				}
-				if done {
-					return nil
+				if !ok {
+					fmt.Fprintln(out, "no exercise in that direction")
+					continue
 				}
-				if next != nil {
-					w = next
-				}
-				if quit, clean := drainKeys(byteCh); quit || clean {
-					return handleQuit(ctx, sess, clean, out, errOut)
-				}
-				if interactive {
-					watch.WriteLegend(out)
-				}
+				refresh()
 			case watch.KeyRedeploy:
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
 				}
 				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
-				}
-				if interactive {
-					watch.WriteLegend(out)
 				}
 			case watch.KeyFastReset:
 				if err := sess.ResetCurrent(ctx, false); err != nil {
@@ -240,35 +212,27 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				if quit, clean := drainKeys(byteCh); quit || clean {
 					return handleQuit(ctx, sess, clean, out, errOut)
 				}
-				if interactive {
-					watch.WriteLegend(out)
-				}
 			case watch.KeyQuit:
 				return handleQuit(ctx, sess, false, out, errOut)
 			case watch.KeyCleanQuit:
 				return handleQuit(ctx, sess, true, out, errOut)
 			}
 		case <-tick:
+			if w == nil {
+				continue
+			}
 			if _, err := w.Scan(); err != nil {
 				continue
 			}
 			if w.ReadyToVerify() {
 				w.Consume()
-				next, done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
+				done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
 				if err != nil {
 					return err
 				}
-				if done {
-					return nil
-				}
-				if next != nil {
-					w = next
-				}
-				if quit, clean := drainKeys(byteCh); quit || clean {
-					return handleQuit(ctx, sess, clean, out, errOut)
-				}
-				if interactive {
-					watch.WriteLegend(out)
+				stop, qerr := after(done, nil)
+				if stop {
+					return qerr
 				}
 			}
 		}
@@ -317,82 +281,71 @@ func drainKeys(ch <-chan byte) (quit, cleanQuit bool) {
 	}
 }
 
-// verifyAndReload verifies the current exercise and, unless the library is
-// complete, returns a fresh watcher for the (possibly new) current exercise.
-// On verify failure it returns (nil, false, nil) so the caller keeps using the
-// existing watcher.
-func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (*watch.Watcher, bool, error) {
+// verifyAndReload verifies the current exercise. It returns done=true when the
+// whole library is complete or the user asked to stop.
+func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, out, errOut io.Writer) (bool, error) {
 	wasQuiz := sess.Current() != nil && sess.Current().Type == content.TypeQuiz
 	if err := sess.VerifyNow(ctx); err != nil {
 		if errors.Is(err, watch.ErrQuizAborted) {
 			fmt.Fprintln(out, "quiz aborted")
 			fmt.Fprintln(out, quitNotice)
-			return nil, true, nil
+			return true, nil
 		}
 		if wasQuiz && errors.Is(err, context.Canceled) {
 			fmt.Fprintln(out, "quiz aborted")
 			fmt.Fprintln(out, quitNotice)
-			return nil, true, nil
+			return true, nil
 		}
 		if errors.Is(err, watch.ErrQuizUnsupported) {
-			return nil, false, err
+			return false, err
 		}
 		if errors.Is(err, watch.ErrQuizNext) || errors.Is(err, watch.ErrQuizPrev) {
 			delta := 1
 			if errors.Is(err, watch.ErrQuizPrev) {
 				delta = -1
 			}
-			return navigate(ctx, sess, lib, cfg, delta, out, errOut)
+			ok, serr := sess.Step(ctx, delta)
+			if serr != nil {
+				return false, serr
+			}
+			if !ok {
+				fmt.Fprintln(out, "no exercise in that direction")
+			}
+			return false, nil
 		}
 		fmt.Fprintf(errOut, "verify error: %v\n", err)
-		return nil, false, nil
+		return false, nil
 	}
-	printProgress(sess, lib, out)
 	if sess.Current() == nil {
-		return nil, true, nil
+		fmt.Fprintln(out, green("all exercises complete"))
+		return true, nil
 	}
-	nw := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
-	if _, err := nw.Scan(); err != nil {
-		fmt.Fprintf(errOut, "warning: %v\n", err)
-	}
-	return nw, false, nil
+	return false, nil
 }
 
-func printProgress(sess *watch.Session, lib *content.Library, out io.Writer) {
-	cur := sess.Current()
-	if cur == nil {
-		fmt.Fprintln(out, "all exercises complete")
-		return
+// printContext renders the once-per-exercise header: progress bar, title,
+// brief, key legend, and a quiz start hint.
+func printContext(sess *watch.Session, lib *content.Library, ex *content.Exercise, out io.Writer) {
+	idx, total := position(lib, ex)
+	fmt.Fprintf(out, "%s %s\n", bold("Progress:"), progressBar(idx, total))
+	fmt.Fprintf(out, "%s\n", bold(fmt.Sprintf("%s: %s", ex.ID, ex.Title)))
+	if ex.Brief != "" {
+		_ = renderMarkdown(out, ex.Brief+"\n")
 	}
+	watch.WriteLegend(out)
+	if ex.Type == content.TypeQuiz {
+		fmt.Fprintln(out, dim("Press Enter to start the quiz."))
+	}
+	fmt.Fprintln(out)
+}
+
+// position returns the 1-based index of ex within the library and its total.
+func position(lib *content.Library, ex *content.Exercise) (int, int) {
 	total := len(lib.Order)
-	idx := 0
-	for i, ex := range lib.Order {
-		if ex.FullID() == cur.FullID() {
-			idx = i + 1
-			break
+	for i, e := range lib.Order {
+		if e.FullID() == ex.FullID() {
+			return i + 1, total
 		}
 	}
-	name := filepath.Base(cur.Dir)
-	fmt.Fprintf(out, "[%d/%d] %s: In Progress\n", idx, total, name)
-	if cur.Brief != "" {
-		_ = renderMarkdown(out, cur.Brief+"\n")
-	}
-}
-
-// navigate moves to the adjacent exercise and returns a watcher for it.
-func navigate(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, delta int, out, errOut io.Writer) (*watch.Watcher, bool, error) {
-	ok, err := sess.Step(ctx, delta)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		fmt.Fprintln(out, "no exercise in that direction")
-		return nil, false, nil
-	}
-	printProgress(sess, lib, out)
-	nw := watch.NewWatcher(sess.Current(), cfg.Watch.Debounce)
-	if _, err := nw.Scan(); err != nil {
-		fmt.Fprintf(errOut, "warning: %v\n", err)
-	}
-	return nw, false, nil
+	return 0, total
 }

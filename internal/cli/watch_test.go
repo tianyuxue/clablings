@@ -68,12 +68,12 @@ func TestVerifyAndReloadCompletes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	next, done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
+	done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
 	if err != nil {
 		t.Fatalf("verifyAndReload: %v", err)
 	}
-	if !done || next != nil {
-		t.Fatalf("done=%v next=%v", done, next)
+	if !done {
+		t.Fatalf("done=%v", done)
 	}
 	if !strings.Contains(out.String(), "all exercises complete") {
 		t.Fatalf("out = %q", out.String())
@@ -336,12 +336,12 @@ func TestVerifyAndReloadQuizAborted(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	next, done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
+	done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
 	if err != nil {
 		t.Fatalf("verifyAndReload: %v", err)
 	}
-	if !done || next != nil {
-		t.Fatalf("done=%v next=%v", done, next)
+	if !done {
+		t.Fatalf("done=%v", done)
 	}
 	if !strings.Contains(out.String(), "quiz aborted") {
 		t.Fatalf("out = %q, want aborted notice", out.String())
@@ -351,26 +351,42 @@ func TestVerifyAndReloadQuizAborted(t *testing.T) {
 	}
 }
 
-func TestWatchLoopQuizNotCompletedGuard(t *testing.T) {
+func TestWatchLoopQuizStaysOnFailure(t *testing.T) {
 	lib, st := oneExerciseLibrary(t)
 	lib.Order[0].Type = content.TypeQuiz
 	cfg, _ := config.LoadFrom("")
+	called := 0
 	sess := watch.New(watch.Options{
 		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
 		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			called++
 			return []assert.Result{{Passed: false}}, nil
 		},
 		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
 		Report: func([]assert.Result) {},
 	})
-	if err := sess.Start(context.Background()); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := sess.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	keyCh := make(chan byte, 1)
+	keyCh <- '\n'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	err := watchLoop(context.Background(), sess, lib, cfg, "en", nil, tick, &out, &out)
-	if err == nil || !strings.Contains(err.Error(), "was not completed") {
-		t.Fatalf("err = %v, want not-completed guard", err)
+	done := make(chan error, 1)
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, "en", keyCh, tick, &out, &out) }()
+	time.Sleep(30 * time.Millisecond)
+	if called != 1 {
+		t.Fatalf("quiz handler called %d times", called)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("watchLoop: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watchLoop did not return after cancel")
 	}
 }
 
@@ -391,12 +407,9 @@ func TestVerifyAndReloadQuizCanceledQuits(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 	var out bytes.Buffer
-	done, finished, err := func() (bool, bool, error) {
-		n, d, e := verifyAndReload(ctx, sess, lib, cfg, &out, &out)
-		return n != nil, d, e
-	}()
-	if err != nil || !finished || done {
-		t.Fatalf("done=%v finished=%v err=%v out=%q", done, finished, err, out.String())
+	done, err := verifyAndReload(ctx, sess, lib, cfg, &out, &out)
+	if err != nil || !done {
+		t.Fatalf("done=%v err=%v out=%q", done, err, out.String())
 	}
 	if !strings.Contains(out.String(), "quiz aborted") {
 		t.Fatalf("out = %q, want aborted notice", out.String())
@@ -406,7 +419,7 @@ func TestVerifyAndReloadQuizCanceledQuits(t *testing.T) {
 	}
 }
 
-func TestWatchLoopAutoPresentsQuiz(t *testing.T) {
+func TestWatchLoopEnterStartsQuiz(t *testing.T) {
 	ch := &content.Chapter{ID: "c1"}
 	ex := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
 	ch.Exercises = []*content.Exercise{ex}
@@ -427,8 +440,10 @@ func TestWatchLoopAutoPresentsQuiz(t *testing.T) {
 	if err := sess.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	keyCh := make(chan byte, 1)
+	keyCh <- '\n'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", nil, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if called != 1 {
@@ -457,7 +472,8 @@ func TestWatchLoopDrainsTypeAheadAfterQuiz(t *testing.T) {
 	if err := sess.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	byteCh := make(chan byte, 2)
+	byteCh := make(chan byte, 3)
+	byteCh <- '\n'
 	byteCh <- 'h'
 	byteCh <- 'q'
 	var out bytes.Buffer
@@ -482,7 +498,7 @@ func TestVerifyAndReloadNonQuizCancelIsNotAbort(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	_, done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
+	done, err := verifyAndReload(context.Background(), sess, lib, cfg, &out, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

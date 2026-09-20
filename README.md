@@ -19,7 +19,10 @@ The exercise library lives at the repository root `clab-exercises/`; see
 
 ## Watch keys
 
-- `Enter` verify the current exercise
+Watch prints a context block once per exercise: a progress bar, the exercise
+title, its brief, and the key legend. Actions never reprint it.
+
+- `Enter` verify the current exercise (on a quiz: start the quiz)
 - `h` show hints
 - `c` show the chapter's concept and RFC reading slices
 - `p` / `n` go to the previous / next exercise (no status change)
@@ -28,9 +31,10 @@ The exercise library lives at the repository root `clab-exercises/`; see
 - `x` quit and destroy containers
 - `Ctrl+C` quit
 
-On `quiz` exercises, watch automatically prompts you to answer: enter option
+On `quiz` exercises, watch asks you to press `Enter` to start. Then enter option
 numbers (comma-separated for multi-select); wrong answers show explanations and
-re-prompt until correct, then advance.
+re-prompt until correct, then advance. `h`/`c` show help and reprint the
+question (not the legend).
 
 ## Configuration
 

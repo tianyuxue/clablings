@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
+
+	"golang.org/x/term"
 
 	"github.com/tianyuxue/clablings/internal/content"
 )
@@ -45,11 +48,18 @@ func WriteHints(w io.Writer, ex *content.Exercise) {
 	}
 }
 
-// WriteLegend prints the watch hot-key legend.
+// WriteLegend prints the watch hot-key legend, with key names highlighted when
+// stdout is a terminal.
 func WriteLegend(w io.Writer) {
-	fmt.Fprintln(w, "[Enter] verify")
-	fmt.Fprintln(w, "[h] hint   [c] concept")
-	fmt.Fprintln(w, "[p] prev   [n] next")
-	fmt.Fprintln(w, "[r] redeploy   [f] fast reset")
-	fmt.Fprintln(w, "[q] quit   [x] clean quit   [Ctrl+C] quit")
+	k := func(s string) string {
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			return "\x1b[1;36m" + s + "\x1b[0m"
+		}
+		return s
+	}
+	fmt.Fprintln(w, k("[Enter]")+" verify")
+	fmt.Fprintln(w, k("[h]")+" hint   "+k("[c]")+" concept")
+	fmt.Fprintln(w, k("[p]")+" prev   "+k("[n]")+" next")
+	fmt.Fprintln(w, k("[r]")+" redeploy   "+k("[f]")+" fast reset")
+	fmt.Fprintln(w, k("[q]")+" quit   "+k("[x]")+" clean quit   "+k("[Ctrl+C]")+" quit")
 }

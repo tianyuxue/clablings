@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+
+	"golang.org/x/term"
 
 	"github.com/tianyuxue/clablings/internal/assert"
 )
@@ -13,9 +16,9 @@ import (
 // come from exercise content and may be in any language.
 func Text(w io.Writer, results []assert.Result) {
 	for _, r := range results {
-		mark := "✓"
+		mark := colorize("32", "✓")
 		if !r.Passed {
-			mark = "✗"
+			mark = colorize("31", "✗")
 		}
 		fmt.Fprintf(w, "%s %s%s\n", mark, label(r.Layer), r.Name)
 		if !r.Passed {
@@ -33,6 +36,14 @@ func Text(w io.Writer, results []assert.Result) {
 			}
 		}
 	}
+}
+
+// colorize wraps s in an ANSI color when stdout is a terminal.
+func colorize(code, s string) string {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return s
+	}
+	return "\x1b[" + code + "m" + s + "\x1b[0m"
 }
 
 func label(layer string) string {

@@ -38,15 +38,9 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 	answers := make([][]int, len(ex.Questions))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
-		redraw := false
 		for {
-			if redraw {
-				fmt.Fprint(out, "\n\n")
-				watch.WriteLegend(out)
-			}
-			redraw = false
-			fmt.Fprintln(out, "(numbers; multi-select like 1,3; h hint, c concept, p prev, n next, q quit)")
-			fmt.Fprintf(out, "\nQ%d: %s\n", qi+1, q.Prompt)
+			fmt.Fprintln(out, dim("(numbers; multi-select like 1,3; h hint, c concept, p prev, n next, q quit)"))
+			fmt.Fprintf(out, "\n%s %s\n", bold(cyan(fmt.Sprintf("Q%d:", qi+1))), q.Prompt)
 			for oi := range q.Options {
 				fmt.Fprintf(out, "  %d) %s\n", oi+1, q.Options[oi].Text)
 			}
@@ -57,7 +51,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 			fmt.Fprintf(out, "%s> ", prompt)
 			line, err := readQuizLine(ctx, in, out, help)
 			if errors.Is(err, errQuizHelp) {
-				redraw = true // reprint legend and question
+				fmt.Fprintln(out)
 				continue
 			}
 			if err != nil {
@@ -65,14 +59,14 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 			}
 			chosen, perr := parseChoices(line, len(q.Options), q.Multiple)
 			if perr != nil {
-				fmt.Fprintf(out, "invalid input: %v\n", perr)
+				fmt.Fprintf(out, "%s %v\n", red("invalid input:"), perr)
 				continue
 			}
 			if sameChoiceSet(chosen, correctChoices(q)) {
 				answers[qi] = chosen
 				break
 			}
-			fmt.Fprintln(out, "not quite:")
+			fmt.Fprintln(out, red("not quite:"))
 			printExplanations(out, q, chosen)
 		}
 	}
