@@ -77,9 +77,9 @@ func (a *lifecycleAdapter) Destroy(ctx context.Context, ch *content.Chapter) err
 }
 
 // makeVerifier combines assertions and the C build into a watch.Verifier. File
-// assertions run first (sentinel gate); if any fails, the rest are skipped.
-// For code-implement exercises the binary is rebuilt between the file gate and
-// the remaining assertions.
+// assertions (when an exercise declares any) run first; if one fails, the rest
+// are skipped. For code-implement exercises the binary is rebuilt between the
+// file assertions and the remaining assertions.
 func makeVerifier(eng *engine.Engine, builder reset.Rebuilder) func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 	return func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
 		var topo *engine.Topology
