@@ -133,9 +133,14 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		}
 		printContext(sess, lib, cur, out)
 		shown = cur.FullID()
-		w = watch.NewWatcher(cur, cfg.Watch.Debounce)
-		if _, err := w.Scan(); err != nil {
-			fmt.Fprintf(errOut, "warning: %v\n", err)
+		w = nil
+		// Only exercises gated on a file assertion react to file edits; runtime
+		// exercises (config-fix) are verified explicitly with Enter.
+		if usesFileTrigger(cur) {
+			w = watch.NewWatcher(cur, cfg.Watch.Debounce)
+			if _, err := w.Scan(); err != nil {
+				fmt.Fprintf(errOut, "warning: %v\n", err)
+			}
 		}
 	}
 	after := func(done bool, err error) (bool, error) {
@@ -348,4 +353,16 @@ func position(lib *content.Library, ex *content.Exercise) (int, int) {
 		}
 	}
 	return 0, total
+}
+
+// usesFileTrigger reports whether an exercise should auto-verify when its
+// watched files change. Only exercises with a file assertion (the sentinel
+// gate) need it; runtime exercises are verified explicitly.
+func usesFileTrigger(ex *content.Exercise) bool {
+	for _, a := range ex.Assertions {
+		if a.Type == "file" {
+			return true
+		}
+	}
+	return false
 }

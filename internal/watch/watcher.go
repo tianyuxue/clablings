@@ -25,6 +25,7 @@ type Watcher struct {
 	ex                  *content.Exercise
 	debounce            time.Duration
 	last                map[string]fingerprint
+	seeded              bool
 	changed             bool
 	changedAt           time.Time
 	allSentinelsRemoved bool
@@ -70,6 +71,12 @@ func (w *Watcher) Scan() (bool, error) {
 
 	w.last = next
 	w.allSentinelsRemoved = allRemoved
+	// The first scan only records a baseline; the files are not "new", so it
+	// must not trigger a verification when the exercise is opened.
+	if !w.seeded {
+		w.seeded = true
+		return false, nil
+	}
 	if newlyChanged {
 		w.changed = true
 		w.changedAt = now

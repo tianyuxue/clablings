@@ -16,6 +16,21 @@ func write(t *testing.T, path, s string) {
 	}
 }
 
+func TestWatcherInitialScanIsNotAChange(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "a.conf"), "ok\n")
+	ex := &content.Exercise{Dir: dir, Files: []content.FileMapping{{Source: "a.conf"}}}
+
+	w := NewWatcher(ex, 5*time.Millisecond)
+	if _, err := w.Scan(); err != nil {
+		t.Fatalf("first Scan: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if w.ReadyToVerify() {
+		t.Fatal("baseline scan must not trigger a verification")
+	}
+}
+
 func TestWatcherDetectsChangeWithoutSentinel(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "a.conf"), "ok\n")
