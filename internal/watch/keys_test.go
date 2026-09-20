@@ -17,6 +17,7 @@ func TestKeyForMappings(t *testing.T) {
 		'c': KeyConcept, 'C': KeyConcept,
 		'n': KeyNext, 'N': KeyNext,
 		'p': KeyPrev, 'P': KeyPrev,
+		0x1b: KeyCancel,
 	}
 	for b, want := range cases {
 		if got, ok := KeyFor(b); !ok || got != want {

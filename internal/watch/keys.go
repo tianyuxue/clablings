@@ -32,6 +32,7 @@ const (
 	KeyConcept
 	KeyNext
 	KeyPrev
+	KeyCancel
 )
 
 // KeyFor maps a byte to a Key; ok is false for unmapped bytes.
@@ -55,6 +56,8 @@ func KeyFor(b byte) (Key, bool) {
 		return KeyNext, true
 	case 'p', 'P':
 		return KeyPrev, true
+	case 0x1b:
+		return KeyCancel, true
 	}
 	return 0, false
 }

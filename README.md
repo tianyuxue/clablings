@@ -26,6 +26,7 @@ title, its brief, and the key legend. Actions never reprint it.
 - `h` show hints
 - `c` show the chapter's concept and RFC reading slices
 - `p` / `n` go to the previous / next exercise (no status change)
+- `Esc` cancel an in-flight verification
 - `r` / `f` hard / fast reset
 - `q` quit (keep containers)
 - `x` quit and destroy containers

@@ -194,6 +194,11 @@ func (s *Session) VerifyNow(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if ctx.Err() != nil {
+		// Canceled mid-run (e.g. the user pressed Esc): do not report partial
+		// results or count an attempt.
+		return ctx.Err()
+	}
 	if s.opts.Report != nil {
 		s.opts.Report(results)
 	}

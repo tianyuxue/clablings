@@ -160,13 +160,68 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		return false, nil
 	}
 	refresh()
+
+	// Verification runs in the background so the key loop stays responsive;
+	// Esc cancels the in-flight verification.
+	type outcome struct {
+		done bool
+		err  error
+	}
+	var vch chan outcome
+	var vcancel context.CancelFunc
+	pendingQuit, pendingClean := false, false
+	startVerify := func() {
+		if vch != nil {
+			return
+		}
+		writeStatus(out, yellow("→ verifying ...")+dim("  (Esc to cancel)"))
+		vctx, cancel := context.WithCancel(ctx)
+		vcancel = cancel
+		pendingQuit, pendingClean = false, false
+		vch = make(chan outcome, 1)
+		go func() {
+			done, err := verifyAndReload(vctx, sess, lib, cfg, out, errOut)
+			vch <- outcome{done: done, err: err}
+		}()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			if vcancel != nil {
+				vcancel()
+			}
 			return handleQuit(ctx, sess, false, out, errOut)
+		case res := <-vch:
+			vch = nil
+			vcancel = nil
+			if pendingQuit || pendingClean {
+				if res.err != nil {
+					return res.err
+				}
+				return handleQuit(ctx, sess, pendingClean, out, errOut)
+			}
+			stop, qerr := after(res.done, res.err)
+			if stop {
+				return qerr
+			}
 		case b, alive := <-byteCh:
 			if !alive {
 				byteCh = nil
+				continue
+			}
+			if vch != nil {
+				// While verifying, Esc cancels; q/x cancel and then quit.
+				switch {
+				case b == 0x1b:
+					vcancel()
+				case b == 'q' || b == 'Q' || b == 0x03:
+					pendingQuit = true
+					vcancel()
+				case b == 'x' || b == 'X':
+					pendingClean = true
+					vcancel()
+				}
 				continue
 			}
 			k, ok := watch.KeyFor(b)
@@ -175,14 +230,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			}
 			switch k {
 			case watch.KeyEnter:
-				done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
-				if err != nil {
-					return err
-				}
-				stop, qerr := after(done, nil)
-				if stop {
-					return qerr
-				}
+				startVerify()
 			case watch.KeyHint:
 				watch.WriteHints(out, sess.Current())
 			case watch.KeyConcept:
@@ -226,7 +274,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				return handleQuit(ctx, sess, true, out, errOut)
 			}
 		case <-tick:
-			if w == nil {
+			if vch != nil || w == nil {
 				continue
 			}
 			if _, err := w.Scan(); err != nil {
@@ -234,14 +282,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			}
 			if w.ReadyToVerify() {
 				w.Consume()
-				done, err := verifyAndReload(ctx, sess, lib, cfg, out, errOut)
-				if err != nil {
-					return err
-				}
-				stop, qerr := after(done, nil)
-				if stop {
-					return qerr
-				}
+				startVerify()
 			}
 		}
 	}
@@ -307,6 +348,10 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 			fmt.Fprintln(out, "quiz aborted")
 			fmt.Fprintln(out, quitNotice)
 			return true, nil
+		}
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(out, yellow("verification canceled"))
+			return false, nil
 		}
 		if errors.Is(err, watch.ErrQuizUnsupported) {
 			return false, err

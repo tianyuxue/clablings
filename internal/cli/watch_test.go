@@ -541,3 +541,50 @@ func TestWatchLoopNavigationAtEnd(t *testing.T) {
 		t.Fatalf("out = %q", out.String())
 	}
 }
+
+func TestWatchLoopEscCancelsVerify(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	started := make(chan struct{})
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(ctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
+			close(started)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 4)
+	tick := make(chan time.Time)
+	var out, errOut bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &errOut) }()
+
+	keyCh <- '\n' // start verification; it blocks until canceled
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("verification never started")
+	}
+	keyCh <- 0x1b // Esc cancels
+	keyCh <- 'q'  // then quit
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("watchLoop: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchLoop did not return after cancel/quit")
+	}
+	if !strings.Contains(out.String(), "verification canceled") {
+		t.Fatalf("out = %q, want cancellation notice", out.String())
+	}
+	if strings.Contains(out.String(), "all exercises complete") {
+		t.Fatalf("canceled verification must not complete the exercise: %q", out.String())
+	}
+}
