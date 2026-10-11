@@ -58,6 +58,15 @@ func New(opts Options) *Session { return &Session{opts: opts} }
 // Current returns the current exercise, or nil when the library is complete.
 func (s *Session) Current() *content.Exercise { return s.current }
 
+// StatusOf returns the progress status of an exercise by full ID. It is
+// read-only and never mutates state.
+func (s *Session) StatusOf(fullID string) state.Status {
+	if s.opts.State == nil {
+		return state.StatusTodo
+	}
+	return s.opts.State.Get(fullID).Status
+}
+
 // Start locates the current exercise, ensures its topology is deployed, and runs setup.
 func (s *Session) Start(ctx context.Context) error {
 	ex, err := s.locateCurrent()

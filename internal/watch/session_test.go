@@ -481,3 +481,18 @@ func TestSessionStepMovesWithoutPassing(t *testing.T) {
 		t.Fatalf("current = %v", s.Current())
 	}
 }
+
+func TestSessionStatusOf(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	st, _ := state.Load(lib.Root)
+	st.Upsert("c1/e1", state.StatusPassed, 2)
+	s := New(Options{Library: lib, State: st, Engine: &fakeEngine{}, Reset: &fakeReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil }})
+	if got := s.StatusOf("c1/e1"); got != state.StatusPassed {
+		t.Fatalf("StatusOf passed = %q, want passed", got)
+	}
+	if got := s.StatusOf("c1/e2"); got != state.StatusTodo {
+		t.Fatalf("StatusOf missing = %q, want todo", got)
+	}
+}
