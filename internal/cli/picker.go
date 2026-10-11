@@ -127,16 +127,22 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	if isCursor {
 		cur = ">"
 	}
-	var s string
 	if r.header {
-		s = truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
-	} else {
-		lead := " "
-		if r.current {
-			lead = "▌"
-		}
-		s = truncate(fmt.Sprintf("%s%s %s  %s  %s  [%s]", cur, lead, statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width)
+		return truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
 	}
+	content := truncate(fmt.Sprintf("%s  %s  %s  [%s]", statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width-3)
+	lead := " "
+	if r.current {
+		// The current exercise is marked by a vertical bar: green once the
+		// cursor has moved away, plain while the cursor sits on that row (where
+		// the whole line is reverse-videoed).
+		if isCursor {
+			lead = "▌"
+		} else {
+			lead = green("▌")
+		}
+	}
+	s := cur + lead + " " + content
 	if isCursor {
 		return reverse(s)
 	}
