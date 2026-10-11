@@ -85,14 +85,25 @@ func moveCursor(rows []pickerRow, cursor, delta int) int {
 	}
 }
 
-func statusMark(s state.Status) string {
+func statusTag(s state.Status) string {
 	switch s {
 	case state.StatusPassed:
-		return "√"
+		return "[passed]"
 	case state.StatusInProgress:
-		return "›"
+		return "[doing]"
 	default:
-		return "·"
+		return "[todo]"
+	}
+}
+
+func colorStatus(s state.Status, tag string) string {
+	switch s {
+	case state.StatusPassed:
+		return green(tag)
+	case state.StatusInProgress:
+		return yellow(tag)
+	default:
+		return dim(tag)
 	}
 }
 
@@ -130,7 +141,6 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	if r.header {
 		return truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
 	}
-	content := truncate(fmt.Sprintf("%s  %s  %s  [%s]", statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width-3)
 	lead := " "
 	if r.current {
 		// The current exercise is marked by a dot: green once the cursor has
@@ -142,11 +152,18 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 			lead = green("●")
 		}
 	}
-	s := cur + lead + " " + content
-	if isCursor {
-		return reverse(s)
+	tag := statusTag(r.status)
+	// Prefix is exactly 3 visible cells (cursor, lead, space); keep status and
+	// its tag visible by budgeting them out of the width.
+	avail := width - 3 - utf8.RuneCountInString(tag) - 1
+	if avail < 1 {
+		avail = 1
 	}
-	return s
+	middle := truncate(fmt.Sprintf("%s  %s  [%s]", r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), avail)
+	if isCursor {
+		return reverse(cur + lead + " " + middle + " " + tag)
+	}
+	return cur + lead + " " + middle + " " + colorStatus(r.status, tag)
 }
 
 func exerciseCount(rows []pickerRow) int {

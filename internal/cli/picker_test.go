@@ -97,8 +97,11 @@ func TestPickerLinesShowMarkers(t *testing.T) {
 	if !strings.Contains(joined, "Select an exercise") {
 		t.Fatalf("missing title:\n%s", joined)
 	}
-	if !strings.Contains(joined, "√") {
-		t.Fatalf("missing passed marker:\n%s", joined)
+	if !strings.Contains(joined, "[passed]") {
+		t.Fatalf("missing passed status tag:\n%s", joined)
+	}
+	if !strings.Contains(joined, "[todo]") {
+		t.Fatalf("missing todo status tag:\n%s", joined)
 	}
 	if !strings.Contains(joined, "●") {
 		t.Fatalf("missing current marker:\n%s", joined)
