@@ -127,14 +127,23 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	if isCursor {
 		cur = ">"
 	}
+	var s string
 	if r.header {
-		return truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
+		s = truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
+	} else {
+		lead := " "
+		if r.current {
+			lead = "▌"
+		}
+		s = truncate(fmt.Sprintf("%s%s %s  %s  %s  [%s]", cur, lead, statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width)
 	}
-	lead := " "
+	if isCursor {
+		return reverse(s)
+	}
 	if r.current {
-		lead = "▌"
+		return bold(s)
 	}
-	return truncate(fmt.Sprintf("%s%s %s  %s  %s  [%s]", cur, lead, statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width)
+	return s
 }
 
 func exerciseCount(rows []pickerRow) int {

@@ -20,6 +20,7 @@ func ansi(code, s string) string {
 
 func bold(s string) string    { return ansi("1", s) }
 func dim(s string) string     { return ansi("2", s) }
+func reverse(s string) string { return ansi("7", s) }
 func green(s string) string   { return ansi("32", s) }
 func red(s string) string     { return ansi("31", s) }
 func yellow(s string) string  { return ansi("33", s) }
