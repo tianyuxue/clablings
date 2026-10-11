@@ -59,7 +59,7 @@ func WriteLegend(w io.Writer) {
 	}
 	fmt.Fprintln(w, k("[Enter]")+" verify")
 	fmt.Fprintln(w, k("[h]")+" hint   "+k("[c]")+" concept")
-	fmt.Fprintln(w, k("[p]")+" prev   "+k("[n]")+" next")
+	fmt.Fprintln(w, k("[p]")+" prev   "+k("[n]")+" next   "+k("[l]")+" list")
 	fmt.Fprintln(w, k("[r]")+" redeploy   "+k("[f]")+" fast reset")
 	fmt.Fprintln(w, k("[q]")+" quit   "+k("[x]")+" clean quit   "+k("[Ctrl+C]")+" quit")
 }

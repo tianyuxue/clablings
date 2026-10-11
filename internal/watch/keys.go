@@ -32,6 +32,7 @@ const (
 	KeyConcept
 	KeyNext
 	KeyPrev
+	KeyList
 	KeyCancel
 )
 
@@ -56,6 +57,8 @@ func KeyFor(b byte) (Key, bool) {
 		return KeyNext, true
 	case 'p', 'P':
 		return KeyPrev, true
+	case 'l', 'L':
+		return KeyList, true
 	case 0x1b:
 		return KeyCancel, true
 	}
