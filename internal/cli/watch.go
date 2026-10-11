@@ -148,6 +148,13 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			}
 		}
 	}
+	// forceRefresh reprints the context block even when the exercise has not
+	// changed; used after the picker closes without jumping so the screen is not
+	// left blank.
+	forceRefresh := func() {
+		shown = ""
+		refresh()
+	}
 	after := func(done bool, err error) (bool, error) {
 		if err != nil {
 			return true, err
@@ -275,16 +282,18 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				id, err := runPicker(ctx, byteCh, out, lib, cur.FullID(), sess.StatusOf)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
+						forceRefresh()
 						continue
 					}
 					return err
 				}
 				if id == "" || id == cur.FullID() {
+					forceRefresh()
 					continue
 				}
 				if err := sess.Run(ctx, id); err != nil {
 					fmt.Fprintf(errOut, "jump error: %v\n", err)
-					refresh()
+					forceRefresh()
 					continue
 				}
 				if quit, clean := drainKeys(byteCh); quit || clean {

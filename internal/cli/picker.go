@@ -140,9 +140,6 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	if isCursor {
 		return reverse(s)
 	}
-	if r.current {
-		return bold(s)
-	}
 	return s
 }
 

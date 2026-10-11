@@ -676,6 +676,11 @@ func TestWatchLoopListCancelKeepsCurrent(t *testing.T) {
 	if len(eng.destroyed) != 0 {
 		t.Fatalf("destroyed = %v, want none", eng.destroyed)
 	}
+	// Cancelling must reprint the context (not leave the screen blank): the
+	// initial refresh and the post-cancel forceRefresh both print "Progress:".
+	if strings.Count(out.String(), "Progress:") < 2 {
+		t.Fatalf("cancel should reprint context; out = %q", out.String())
+	}
 }
 
 func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
