@@ -100,7 +100,7 @@ func TestPickerLinesShowMarkers(t *testing.T) {
 	if !strings.Contains(joined, "√") {
 		t.Fatalf("missing passed marker:\n%s", joined)
 	}
-	if !strings.Contains(joined, "▌") {
+	if !strings.Contains(joined, "●") {
 		t.Fatalf("missing current marker:\n%s", joined)
 	}
 	if !strings.Contains(joined, ">") {

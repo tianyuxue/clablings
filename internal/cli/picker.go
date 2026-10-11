@@ -133,13 +133,13 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	content := truncate(fmt.Sprintf("%s  %s  %s  [%s]", statusMark(r.status), r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), width-3)
 	lead := " "
 	if r.current {
-		// The current exercise is marked by a vertical bar: green once the
-		// cursor has moved away, plain while the cursor sits on that row (where
-		// the whole line is reverse-videoed).
+		// The current exercise is marked by a dot: green once the cursor has
+		// moved away, plain while the cursor sits on that row (where the whole
+		// line is reverse-videoed).
 		if isCursor {
-			lead = "▌"
+			lead = "●"
 		} else {
-			lead = green("▌")
+			lead = green("●")
 		}
 	}
 	s := cur + lead + " " + content
