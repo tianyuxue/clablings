@@ -134,10 +134,6 @@ func truncate(s string, width int) string {
 }
 
 func rowText(r pickerRow, isCursor bool, width int) string {
-	cur := " "
-	if isCursor {
-		cur = ">"
-	}
 	if r.header {
 		rest := truncate(fmt.Sprintf("%s  %s", r.chapterID, r.title), width-4)
 		return "  " + cyan("▌") + " " + rest
@@ -145,8 +141,8 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 	lead := " "
 	if r.current {
 		// The current exercise is marked by a dot: green once the cursor has
-		// moved away, plain while the cursor sits on that row (where the whole
-		// line is reverse-videoed).
+		// moved away, plain while the cursor sits on that row (the text is
+		// reverse-videoed there).
 		if isCursor {
 			lead = "●"
 		} else {
@@ -154,17 +150,18 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 		}
 	}
 	tag := statusTag(r.status)
-	// Prefix is exactly 3 visible cells (cursor, lead, space); keep status and
-	// its tag visible by budgeting them out of the width.
-	avail := width - 3 - utf8.RuneCountInString(tag) - 1
+	// Prefix is 4 visible cells (two spaces, the marker, a space); budget the
+	// status tag out of the width so it always stays visible.
+	avail := width - 4 - utf8.RuneCountInString(tag) - 1
 	if avail < 1 {
 		avail = 1
 	}
 	middle := truncate(fmt.Sprintf("%s  %s  [%s]", r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), avail)
 	if isCursor {
-		return reverse(cur + lead + " " + middle + " " + tag)
+		// Highlight only the text, not the leading indent/marker.
+		return "  " + lead + " " + reverse(middle+" "+tag)
 	}
-	return cur + lead + " " + middle + " " + colorStatus(r.status, tag)
+	return "  " + lead + " " + middle + " " + colorStatus(r.status, tag)
 }
 
 func exerciseCount(rows []pickerRow) int {

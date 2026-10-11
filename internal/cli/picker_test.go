@@ -106,9 +106,6 @@ func TestPickerLinesShowMarkers(t *testing.T) {
 	if !strings.Contains(joined, "●") {
 		t.Fatalf("missing current marker:\n%s", joined)
 	}
-	if !strings.Contains(joined, ">") {
-		t.Fatalf("missing cursor marker:\n%s", joined)
-	}
 }
 
 func TestTruncate(t *testing.T) {
@@ -154,7 +151,7 @@ func TestPickerLinesViewport(t *testing.T) {
 		t.Fatalf("long len = %d, want 24", len(ls))
 	}
 	joined := strings.Join(ls, "\n")
-	if !strings.Contains(joined, ">") || !strings.Contains(joined, "e099") {
+	if !strings.Contains(joined, "e099") {
 		t.Fatalf("cursor row must be visible at the bottom:\n%s", joined)
 	}
 	if !strings.Contains(joined, "↑ ") {
@@ -166,7 +163,7 @@ func TestPickerLinesViewport(t *testing.T) {
 	if len(ls) != 4 {
 		t.Fatalf("tiny len = %d, want 4", len(ls))
 	}
-	if !strings.Contains(strings.Join(ls, "\n"), ">") {
+	if !strings.Contains(strings.Join(ls, "\n"), "e099") {
 		t.Fatalf("cursor must be visible at tiny height:\n%s", strings.Join(ls, "\n"))
 	}
 
