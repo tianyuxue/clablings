@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/term"
@@ -211,4 +214,107 @@ func pickerSize() (int, int) {
 		return 80, 24
 	}
 	return w, h
+}
+
+// runPicker renders the jump picker and returns the chosen exercise FullID, or
+// "" when the user cancels (Esc / Ctrl+C / q / closed input).
+func runPicker(ctx context.Context, in <-chan byte, out io.Writer, lib *content.Library, currentID string, statusOf func(string) state.Status) (string, error) {
+	rows := buildRows(lib, currentID, statusOf)
+	if len(rows) == 0 {
+		return "", nil
+	}
+	cursor := initialCursor(rows, currentID)
+	width, height := pickerSize()
+	lines := pickerLines(rows, cursor, width, height)
+	drawn := 0
+	color := colorOn()
+
+	draw := func() {
+		if color && drawn > 0 {
+			fmt.Fprintf(out, "\x1b[%dA", drawn)
+		}
+		for _, ln := range lines {
+			if color {
+				fmt.Fprint(out, "\r\x1b[K")
+			}
+			fmt.Fprintln(out, ln)
+		}
+		drawn = len(lines)
+	}
+	clear := func() {
+		if !color || drawn == 0 {
+			return
+		}
+		fmt.Fprintf(out, "\x1b[%dA", drawn)
+		for i := 0; i < drawn; i++ {
+			fmt.Fprint(out, "\r\x1b[K\n")
+		}
+		fmt.Fprintf(out, "\x1b[%dA", drawn)
+	}
+	if color {
+		fmt.Fprint(out, "\x1b[?25l") // hide cursor
+		defer fmt.Fprint(out, "\x1b[?25h")
+	}
+	defer clear()
+	draw()
+
+	move := func(delta int) {
+		cursor = moveCursor(rows, cursor, delta)
+		lines = pickerLines(rows, cursor, width, height)
+		draw()
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case b, ok := <-in:
+			if !ok {
+				return "", nil
+			}
+			switch b {
+			case '\r', '\n':
+				return rows[cursor].ex.FullID(), nil
+			case 0x03, 'q', 'Q':
+				return "", nil
+			case 'j', 'J':
+				move(1)
+			case 'k', 'K':
+				move(-1)
+			case 0x1b:
+				final, cancel := readCSI(in)
+				switch final {
+				case 'A':
+					move(-1)
+				case 'B':
+					move(1)
+				default:
+					if cancel {
+						return "", nil
+					}
+				}
+			}
+		}
+	}
+}
+
+// readCSI reads the bytes after ESC. It returns the final byte of an ANSI CSI
+// sequence (e.g. 'A'/'B' for up/down), or cancel=true when ESC stood alone.
+func readCSI(in <-chan byte) (final byte, cancel bool) {
+	b, ok := recvByte(in, 50*time.Millisecond)
+	if !ok {
+		return 0, true
+	}
+	if b != '[' {
+		return 0, false
+	}
+	for {
+		fb, ok := recvByte(in, 50*time.Millisecond)
+		if !ok {
+			return 0, false
+		}
+		if fb >= 0x40 && fb <= 0x7e {
+			return fb, false
+		}
+	}
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -169,5 +171,61 @@ func TestPickerLinesViewport(t *testing.T) {
 	ls = pickerLines(lrows, 0, 80, 24)
 	if strings.Contains(strings.Join(ls, "\n"), "↑ ") {
 		t.Fatalf("top window should have no up indicator:\n%s", strings.Join(ls, "\n"))
+	}
+}
+
+func feedBytes(bs ...byte) chan byte {
+	ch := make(chan byte, len(bs)+4)
+	for _, b := range bs {
+		ch <- b
+	}
+	return ch
+}
+
+func TestRunPickerSelectsWithArrows(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	// ESC [ B (down) twice, then Enter.
+	in := feedBytes(0x1b, '[', 'B', 0x1b, '[', 'B', '\r')
+	got, err := runPicker(context.Background(), in, &out, lib, "c1/e1", pickerStatus(nil))
+	if err != nil {
+		t.Fatalf("runPicker: %v", err)
+	}
+	// c1/e1 -> down -> c1/e2 -> down -> c2/e3 (header skipped)
+	if got != "c2/e3" {
+		t.Fatalf("selected = %q, want c2/e3", got)
+	}
+}
+
+func TestRunPickerJKMove(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	in := feedBytes('j', '\r') // down one from c1/e1 -> c1/e2
+	got, _ := runPicker(context.Background(), in, &out, lib, "c1/e1", pickerStatus(nil))
+	if got != "c1/e2" {
+		t.Fatalf("selected = %q, want c1/e2", got)
+	}
+}
+
+func TestRunPickerEscCancels(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	in := feedBytes(0x1b) // bare ESC (no following bytes; recvByte times out)
+	got, err := runPicker(context.Background(), in, &out, lib, "c1/e1", pickerStatus(nil))
+	if err != nil {
+		t.Fatalf("runPicker: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("esc should cancel, got %q", got)
+	}
+}
+
+func TestRunPickerQCancels(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	in := feedBytes('q')
+	got, _ := runPicker(context.Background(), in, &out, lib, "c1/e1", pickerStatus(nil))
+	if got != "" {
+		t.Fatalf("q should cancel, got %q", got)
 	}
 }
