@@ -267,6 +267,29 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 					continue
 				}
 				refresh()
+			case watch.KeyList:
+				cur := sess.Current()
+				if cur == nil {
+					continue
+				}
+				id, err := runPicker(ctx, byteCh, out, lib, cur.FullID(), sess.StatusOf)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						continue
+					}
+					return err
+				}
+				if id == "" || id == cur.FullID() {
+					continue
+				}
+				if err := sess.Run(ctx, id); err != nil {
+					fmt.Fprintf(errOut, "jump error: %v\n", err)
+					continue
+				}
+				if quit, clean := drainKeys(byteCh); quit || clean {
+					return handleQuit(ctx, sess, clean, out, errOut)
+				}
+				refresh()
 			case watch.KeyRedeploy:
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
