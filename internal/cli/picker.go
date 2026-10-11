@@ -137,8 +137,8 @@ func truncate(s string, width int) string {
 
 func rowText(r pickerRow, isCursor bool, width int) string {
 	if r.header {
-		rest := truncate(fmt.Sprintf("%s  %s", r.chapterID, r.title), width-4)
-		return "  " + cyan("▌") + " " + rest
+		rest := truncate(fmt.Sprintf("%s  %s", r.chapterID, r.title), width-2)
+		return "  " + bold(cyan(rest))
 	}
 	branch := "├── "
 	if r.last {
