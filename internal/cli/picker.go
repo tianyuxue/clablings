@@ -24,6 +24,7 @@ type pickerRow struct {
 	ex        *content.Exercise
 	current   bool
 	status    state.Status
+	last      bool // last exercise of its chapter (tree `└──` vs `├──`)
 }
 
 // buildRows flattens the library into chapter headers and exercise rows.
@@ -34,11 +35,12 @@ func buildRows(lib *content.Library, currentID string, statusOf func(string) sta
 			continue
 		}
 		rows = append(rows, pickerRow{header: true, chapterID: ch.ID, title: ch.Title})
-		for _, ex := range ch.Exercises {
+		for i, ex := range ch.Exercises {
 			rows = append(rows, pickerRow{
 				ex:      ex,
 				current: ex.FullID() == currentID,
 				status:  statusOf(ex.FullID()),
+				last:    i == len(ch.Exercises)-1,
 			})
 		}
 	}
@@ -138,30 +140,35 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 		rest := truncate(fmt.Sprintf("%s  %s", r.chapterID, r.title), width-4)
 		return "  " + cyan("▌") + " " + rest
 	}
-	lead := " "
-	if r.current {
-		// The current exercise is marked by a dot: green once the cursor has
-		// moved away, plain while the cursor sits on that row (the text is
-		// reverse-videoed there).
-		if isCursor {
-			lead = "●"
-		} else {
-			lead = green("●")
-		}
+	branch := "├── "
+	if r.last {
+		branch = "└── "
 	}
+	// The current exercise is marked by a dot: green once the cursor has moved
+	// away, plain while the cursor sits on that row (the text is reverse-videoed
+	// there).
+	leadPlain := " "
+	if r.current {
+		leadPlain = "●"
+	}
+	leadColored := leadPlain
+	if r.current && !isCursor {
+		leadColored = green("●")
+	}
+	prefixPlain := "  " + branch + leadPlain + " "
+	prefix := "  " + branch + leadColored + " "
 	tag := statusTag(r.status)
-	// Prefix is 4 visible cells (two spaces, the marker, a space); budget the
-	// status tag out of the width so it always stays visible.
-	avail := width - 4 - utf8.RuneCountInString(tag) - 1
+	// Budget the status tag out of the width so it always stays visible.
+	avail := width - utf8.RuneCountInString(prefixPlain) - utf8.RuneCountInString(tag) - 1
 	if avail < 1 {
 		avail = 1
 	}
 	middle := truncate(fmt.Sprintf("%s  %s  [%s]", r.ex.ID, r.ex.Title, typeBadge(r.ex.Type)), avail)
 	if isCursor {
-		// Highlight only the text, not the leading indent/marker.
-		return "  " + lead + " " + reverse(middle+" "+tag)
+		// Highlight only the text, not the leading indent/branch/marker.
+		return prefix + reverse(middle+" "+tag)
 	}
-	return "  " + lead + " " + middle + " " + colorStatus(r.status, tag)
+	return prefix + middle + " " + colorStatus(r.status, tag)
 }
 
 func exerciseCount(rows []pickerRow) int {
