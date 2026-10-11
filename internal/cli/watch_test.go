@@ -623,6 +623,93 @@ func TestClassifyEsc(t *testing.T) {
 	})
 }
 
+func twoChapterWatchLibrary(t *testing.T) (*content.Library, *state.State) {
+	t.Helper()
+	ch1 := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab1"}
+	e1 := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch1}
+	ch1.Exercises = []*content.Exercise{e1}
+	ch2 := &content.Chapter{ID: "c2", TopologyPath: "c2/topology.clab.yml", TopologyName: "lab2"}
+	e2 := &content.Exercise{ID: "e2", Chapter: "c2", ChapterRef: ch2}
+	ch2.Exercises = []*content.Exercise{e2}
+	lib := &content.Library{
+		Root:     t.TempDir(),
+		Order:    []*content.Exercise{e1, e2},
+		ByID:     map[string]*content.Exercise{"c1/e1": e1, "c2/e2": e2},
+		Chapters: []*content.Chapter{ch1, ch2},
+	}
+	st, err := state.Load(lib.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lib, st
+}
+
+func TestWatchLoopListCancelKeepsCurrent(t *testing.T) {
+	lib, st := twoChapterWatchLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- 'l'
+	keyCh <- 0x1b // bare Esc cancels the picker; 'q' must arrive after its Esc window
+	go func() {
+		time.Sleep(80 * time.Millisecond)
+		keyCh <- 'q'
+	}()
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if sess.Current() == nil || sess.Current().FullID() != "c1/e1" {
+		t.Fatalf("current = %v, want c1/e1", sess.Current())
+	}
+	if len(eng.deployed) != 1 || eng.deployed[0] != "c1" {
+		t.Fatalf("deployed = %v, want [c1] only", eng.deployed)
+	}
+	if len(eng.destroyed) != 0 {
+		t.Fatalf("destroyed = %v, want none", eng.destroyed)
+	}
+}
+
+func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
+	lib, st := twoChapterWatchLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- 'l'
+	keyCh <- 'j'  // move down: c1/e1 -> c2/e2 (header skipped)
+	keyCh <- '\r' // jump
+	keyCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if sess.Current() == nil || sess.Current().FullID() != "c2/e2" {
+		t.Fatalf("current = %v, want c2/e2", sess.Current())
+	}
+	if len(eng.destroyed) != 1 || eng.destroyed[0] != "c1" {
+		t.Fatalf("destroyed = %v, want [c1]", eng.destroyed)
+	}
+	if len(eng.deployed) != 2 || eng.deployed[1] != "c2" {
+		t.Fatalf("deployed = %v, want [c1 c2]", eng.deployed)
+	}
+}
+
 func TestPrintContextLayout(t *testing.T) {
 	lib, _ := oneExerciseLibrary(t)
 	ex := lib.Order[0]

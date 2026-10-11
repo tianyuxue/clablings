@@ -284,6 +284,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				}
 				if err := sess.Run(ctx, id); err != nil {
 					fmt.Fprintf(errOut, "jump error: %v\n", err)
+					refresh()
 					continue
 				}
 				if quit, clean := drainKeys(byteCh); quit || clean {
