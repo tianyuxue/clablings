@@ -230,6 +230,9 @@ func runPicker(ctx context.Context, in <-chan byte, out io.Writer, lib *content.
 	color := colorOn()
 
 	draw := func() {
+		if !color && drawn > 0 {
+			return // non-TTY: render once, then stay static
+		}
 		if color && drawn > 0 {
 			fmt.Fprintf(out, "\x1b[%dA", drawn)
 		}
@@ -264,6 +267,20 @@ func runPicker(ctx context.Context, in <-chan byte, out io.Writer, lib *content.
 		draw()
 	}
 
+	handle := func(b byte) (sel string, done bool) {
+		switch b {
+		case '\r', '\n':
+			return rows[cursor].ex.FullID(), true
+		case 0x03, 'q', 'Q':
+			return "", true
+		case 'j', 'J':
+			move(1)
+		case 'k', 'K':
+			move(-1)
+		}
+		return "", false
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -272,49 +289,50 @@ func runPicker(ctx context.Context, in <-chan byte, out io.Writer, lib *content.
 			if !ok {
 				return "", nil
 			}
-			switch b {
-			case '\r', '\n':
-				return rows[cursor].ex.FullID(), nil
-			case 0x03, 'q', 'Q':
-				return "", nil
-			case 'j', 'J':
-				move(1)
-			case 'k', 'K':
-				move(-1)
-			case 0x1b:
-				final, cancel := readCSI(in)
+			if b == 0x1b {
+				final, follow, cancel := readCSI(in)
+				if cancel {
+					return "", nil
+				}
+				if follow != 0 {
+					if sel, done := handle(follow); done {
+						return sel, nil
+					}
+					continue
+				}
 				switch final {
 				case 'A':
 					move(-1)
 				case 'B':
 					move(1)
-				default:
-					if cancel {
-						return "", nil
-					}
 				}
+				continue
+			}
+			if sel, done := handle(b); done {
+				return sel, nil
 			}
 		}
 	}
 }
 
 // readCSI reads the bytes after ESC. It returns the final byte of an ANSI CSI
-// sequence (e.g. 'A'/'B' for up/down), or cancel=true when ESC stood alone.
-func readCSI(in <-chan byte) (final byte, cancel bool) {
+// sequence (e.g. 'A'/'B' for up/down), or follow (with final 0) when a non-CSI
+// byte immediately trailed ESC, or cancel=true when ESC stood alone.
+func readCSI(in <-chan byte) (final byte, follow byte, cancel bool) {
 	b, ok := recvByte(in, 50*time.Millisecond)
 	if !ok {
-		return 0, true
+		return 0, 0, true
 	}
 	if b != '[' {
-		return 0, false
+		return 0, b, false
 	}
 	for {
 		fb, ok := recvByte(in, 50*time.Millisecond)
 		if !ok {
-			return 0, false
+			return 0, 0, false
 		}
 		if fb >= 0x40 && fb <= 0x7e {
-			return fb, false
+			return fb, 0, false
 		}
 	}
 }

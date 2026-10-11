@@ -229,3 +229,47 @@ func TestRunPickerQCancels(t *testing.T) {
 		t.Fatalf("q should cancel, got %q", got)
 	}
 }
+
+func closedChan() chan byte {
+	ch := make(chan byte)
+	close(ch)
+	return ch
+}
+
+func TestRunPickerEscThenKeyNavigates(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	in := feedBytes(0x1b, 'j', '\r') // ESC immediately followed by j: j must be reprocessed
+	got, _ := runPicker(context.Background(), in, &out, lib, "c1/e1", pickerStatus(nil))
+	if got != "c1/e2" {
+		t.Fatalf("selected = %q, want c1/e2", got)
+	}
+}
+
+func TestRunPickerArrowUp(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	in := feedBytes(0x1b, '[', 'A', 0x1b, '[', 'A', '\r') // up twice from c2/e3 -> c1/e1
+	got, _ := runPicker(context.Background(), in, &out, lib, "c2/e3", pickerStatus(nil))
+	if got != "c1/e1" {
+		t.Fatalf("selected = %q, want c1/e1", got)
+	}
+}
+
+func TestRunPickerCtrlCCancels(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	got, _ := runPicker(context.Background(), feedBytes(0x03), &out, lib, "c1/e1", pickerStatus(nil))
+	if got != "" {
+		t.Fatalf("ctrl-c should cancel, got %q", got)
+	}
+}
+
+func TestRunPickerClosedInput(t *testing.T) {
+	lib := pickerLib()
+	var out bytes.Buffer
+	got, err := runPicker(context.Background(), closedChan(), &out, lib, "c1/e1", pickerStatus(nil))
+	if err != nil || got != "" {
+		t.Fatalf("closed input => (%q,%v), want empty,nil", got, err)
+	}
+}
