@@ -32,14 +32,10 @@ func buildRows(lib *content.Library, currentID string, statusOf func(string) sta
 		}
 		rows = append(rows, pickerRow{header: true, chapterID: ch.ID, title: ch.Title})
 		for _, ex := range ch.Exercises {
-			st := statusOf(ex.FullID())
-			if st == "" {
-				st = state.StatusTodo
-			}
 			rows = append(rows, pickerRow{
 				ex:      ex,
 				current: ex.FullID() == currentID,
-				status:  st,
+				status:  statusOf(ex.FullID()),
 			})
 		}
 	}

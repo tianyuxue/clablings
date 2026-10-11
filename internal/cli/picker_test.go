@@ -24,7 +24,12 @@ func pickerLib() *content.Library {
 }
 
 func pickerStatus(m map[string]state.Status) func(string) state.Status {
-	return func(id string) state.Status { return m[id] }
+	return func(id string) state.Status {
+		if s, ok := m[id]; ok {
+			return s
+		}
+		return state.StatusTodo
+	}
 }
 
 func TestBuildRowsGroupsByChapter(t *testing.T) {
