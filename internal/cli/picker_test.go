@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -81,6 +82,9 @@ func TestMoveCursorSkipsHeaders(t *testing.T) {
 	if got := moveCursor(rows, 1, -1); got != 1 {
 		t.Fatalf("up at start = %d, want 1 (clamp)", got)
 	}
+	if got := moveCursor(rows, 2, 0); got != 2 {
+		t.Fatalf("delta 0 = %d, want 2 (unchanged)", got)
+	}
 }
 
 func TestPickerLinesShowMarkers(t *testing.T) {
@@ -108,5 +112,62 @@ func TestTruncate(t *testing.T) {
 	}
 	if got := truncate("hello", 4); got != "hel…" {
 		t.Fatalf("long = %q", got)
+	}
+}
+
+func longPickerLib(n int) *content.Library {
+	ch := &content.Chapter{ID: "c1", Title: "Big"}
+	var exs []*content.Exercise
+	byID := map[string]*content.Exercise{}
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("e%03d", i)
+		ex := &content.Exercise{ID: id, Chapter: "c1", Title: fmt.Sprintf("Ex %d", i), Type: content.TypeConfigFix, ChapterRef: ch}
+		exs = append(exs, ex)
+		byID["c1/"+id] = ex
+	}
+	ch.Exercises = exs
+	return &content.Library{Chapters: []*content.Chapter{ch}, Order: exs, ByID: byID}
+}
+
+func TestPickerLinesViewport(t *testing.T) {
+	// short list: all rows shown, padded to exactly height lines
+	short := pickerLib()
+	ls := pickerLines(buildRows(short, "c1/e1", pickerStatus(nil)), 1, 80, 24)
+	if len(ls) != 24 {
+		t.Fatalf("short len = %d, want 24", len(ls))
+	}
+	if !strings.Contains(strings.Join(ls, "\n"), "e2") {
+		t.Fatalf("short list should show all rows:\n%s", strings.Join(ls, "\n"))
+	}
+
+	// long list, cursor at the last row: cursor must stay visible
+	long := longPickerLib(100)
+	lrows := buildRows(long, "c1/e099", pickerStatus(nil))
+	lcursor := initialCursor(lrows, "c1/e099")
+	ls = pickerLines(lrows, lcursor, 80, 24)
+	if len(ls) != 24 {
+		t.Fatalf("long len = %d, want 24", len(ls))
+	}
+	joined := strings.Join(ls, "\n")
+	if !strings.Contains(joined, ">") || !strings.Contains(joined, "e099") {
+		t.Fatalf("cursor row must be visible at the bottom:\n%s", joined)
+	}
+	if !strings.Contains(joined, "↑ ") {
+		t.Fatalf("expected an up indicator for a bottom window:\n%s", joined)
+	}
+
+	// tiny height still returns exactly height lines with the cursor visible
+	ls = pickerLines(lrows, lcursor, 80, 4)
+	if len(ls) != 4 {
+		t.Fatalf("tiny len = %d, want 4", len(ls))
+	}
+	if !strings.Contains(strings.Join(ls, "\n"), ">") {
+		t.Fatalf("cursor must be visible at tiny height:\n%s", strings.Join(ls, "\n"))
+	}
+
+	// cursor at the very top of a long list: no up indicator
+	ls = pickerLines(lrows, 0, 80, 24)
+	if strings.Contains(strings.Join(ls, "\n"), "↑ ") {
+		t.Fatalf("top window should have no up indicator:\n%s", strings.Join(ls, "\n"))
 	}
 }

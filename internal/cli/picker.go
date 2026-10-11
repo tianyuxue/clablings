@@ -66,8 +66,8 @@ func initialCursor(rows []pickerRow, currentID string) int {
 // moveCursor moves by delta, skipping chapter headers and clamping to the
 // first/last selectable row.
 func moveCursor(rows []pickerRow, cursor, delta int) int {
-	if len(rows) == 0 {
-		return 0
+	if len(rows) == 0 || delta == 0 {
+		return cursor
 	}
 	i := cursor
 	for {
@@ -104,6 +104,8 @@ func typeBadge(t content.ExerciseType) string {
 	}
 }
 
+// Note: counts runes, not terminal cells; wide (CJK) runes may occupy two
+// columns, so a line can still wrap. Acceptable for v1.
 func truncate(s string, width int) string {
 	if width <= 0 {
 		return ""
@@ -143,7 +145,9 @@ func exerciseCount(rows []pickerRow) int {
 }
 
 // pickerLines returns exactly `height` display lines (title + body) for the
-// current cursor position, windowed around the cursor.
+// current cursor position, windowed around the cursor. Long lists reserve one
+// line each at top and bottom for overflow indicators so the cursor row always
+// fits.
 func pickerLines(rows []pickerRow, cursor, width, height int) []string {
 	if width < 24 {
 		width = 80
@@ -152,8 +156,25 @@ func pickerLines(rows []pickerRow, cursor, width, height int) []string {
 		height = 24
 	}
 	body := height - 1
-	start := cursor - body/2
-	maxStart := len(rows) - body
+	out := make([]string, 0, height)
+	out = append(out, truncate(fmt.Sprintf("%s  (%d exercises)", pickerTitle, exerciseCount(rows)), width))
+
+	if len(rows) <= body {
+		for i := 0; i < len(rows); i++ {
+			out = append(out, rowText(rows[i], i == cursor, width))
+		}
+		for len(out) < height {
+			out = append(out, "")
+		}
+		return out
+	}
+
+	content := body - 2
+	if content < 1 {
+		content = 1
+	}
+	start := cursor - content/2
+	maxStart := len(rows) - content
 	if maxStart < 0 {
 		maxStart = 0
 	}
@@ -163,29 +184,24 @@ func pickerLines(rows []pickerRow, cursor, width, height int) []string {
 	if start < 0 {
 		start = 0
 	}
-	end := start + body
+	end := start + content
 	if end > len(rows) {
 		end = len(rows)
 	}
-	out := make([]string, 0, height)
-	out = append(out, truncate(fmt.Sprintf("%s  (%d exercises)", pickerTitle, exerciseCount(rows)), width))
-	bodyLines := make([]string, 0, body)
 	if start > 0 {
-		bodyLines = append(bodyLines, fmt.Sprintf("  ↑ %d more", start))
+		out = append(out, fmt.Sprintf("  ↑ %d more", start))
+	} else {
+		out = append(out, "")
 	}
 	for i := start; i < end; i++ {
-		bodyLines = append(bodyLines, rowText(rows[i], i == cursor, width))
+		out = append(out, rowText(rows[i], i == cursor, width))
 	}
 	if end < len(rows) {
-		bodyLines = append(bodyLines, fmt.Sprintf("  ↓ %d more", len(rows)-end))
+		out = append(out, fmt.Sprintf("  ↓ %d more", len(rows)-end))
+	} else {
+		out = append(out, "")
 	}
-	if len(bodyLines) > body {
-		bodyLines = bodyLines[:body]
-	}
-	for len(bodyLines) < body {
-		bodyLines = append(bodyLines, "")
-	}
-	return append(out, bodyLines...)
+	return out
 }
 
 // pickerSize returns the terminal width/height, falling back to 80x24.
