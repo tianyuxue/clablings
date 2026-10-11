@@ -139,7 +139,8 @@ func rowText(r pickerRow, isCursor bool, width int) string {
 		cur = ">"
 	}
 	if r.header {
-		return truncate(fmt.Sprintf("%s   ── %s  %s", cur, r.chapterID, r.title), width)
+		rest := truncate(fmt.Sprintf("%s  %s", r.chapterID, r.title), width-4)
+		return "  " + cyan("▌") + " " + rest
 	}
 	lead := " "
 	if r.current {
