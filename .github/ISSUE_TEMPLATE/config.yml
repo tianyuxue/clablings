@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Exercise content
+    url: https://github.com/tianyuxue/clab-exercises/issues
+    about: Report exercise content, translation, or lab topology problems here.
+  - name: containerlab documentation
+    url: https://containerlab.dev
+    about: Installation and topology file reference for containerlab itself.
+  - name: Security report
+    url: https://github.com/tianyuxue/clablings/security/advisories/new
+    about: Please report vulnerabilities privately.

@@ -1,48 +1,149 @@
 # Clablings
 
-Interactive network practice and protocol mastery platform CLI.
+[![test](https://github.com/tianyuxue/clablings/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/tianyuxue/clablings/actions/workflows/test.yml)
+[![Integration](https://github.com/tianyuxue/clablings/actions/workflows/integration.yml/badge.svg?branch=main)](https://github.com/tianyuxue/clablings/actions/workflows/integration.yml)
+[![Release](https://github.com/tianyuxue/clablings/actions/workflows/release.yml/badge.svg)](https://github.com/tianyuxue/clablings/actions/workflows/release.yml)
+![Go](https://img.shields.io/badge/go-1.25-00ADD8)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
+> A terminal-first network practice runner: guided exercises, quizzes, real
+> containerlab topologies, declarative checks, and headless verification.
+
+**English** | [简体中文](README.zh-CN.md)
+
+## Features
+
+- **Guided watch mode**: one exercise at a time, with hints, concept/RFC reading,
+  fast/hard reset, and a progress bar.
+- **Real network labs**: deploys containerlab topologies and drives Docker.
+- **Multiple exercise types**: quiz, runtime `config-fix`, file-driven
+  `config-fix`, and C `code-implement`.
+- **Declarative assertions**: exec, file, interface, and link checks with
+  optional polling (`wait`).
+- **Headless test mode**: `clablings test` for CI, with text or JSON output.
+- **Bilingual content**: English and Simplified Chinese, with Chinese as the
+  default content language.
+- **clab-tui integration**: `clablings debug` opens the current chapter's shared
+  topology in [clab-tui](https://github.com/tianyuxue/clab-tui).
+
+## Requirements
+
+- **Linux** (the labs use Linux namespaces and the Docker CLI).
+- **[containerlab](https://containerlab.dev/install/)** on `PATH`.
+- **Docker** with a running daemon.
+- Go **1.25** when building from source.
+- Optional: **clab-tui** on `PATH` for `clablings debug`.
+
+Running labs usually needs root, or containerlab installed with SUID. The exact
+privilege model depends on your containerlab/Docker setup.
+
+## Install
+
+### Install script
 
 ```bash
-clablings watch [--root DIR]        # watch mode
+curl -fsSL https://raw.githubusercontent.com/tianyuxue/clablings/main/scripts/install.sh | sh
+```
+
+The script downloads the latest Linux release, verifies `checksums.txt`, and
+installs to `~/.local/bin/clablings`. Use `--version`, `--bindir`, or
+`--uninstall` if needed:
+
+```bash
+./scripts/install.sh --version v0.1.0
+./scripts/install.sh --bindir "$HOME/bin"
+./scripts/install.sh --uninstall
+```
+
+### Manual install
+
+```bash
+curl -fsSLO "https://github.com/tianyuxue/clablings/releases/latest/download/clablings_linux_amd64.tar.gz"
+curl -fsSLO "https://github.com/tianyuxue/clablings/releases/latest/download/checksums.txt"
+sha256sum -c checksums.txt --ignore-missing
+tar -xzf clablings_linux_amd64.tar.gz
+sudo install -m 0755 clablings_linux_amd64/clablings /usr/local/bin/clablings
+```
+
+Use `clablings_linux_arm64.tar.gz` on arm64.
+
+### Build from source
+
+```bash
+git clone https://github.com/tianyuxue/clablings
+cd clablings
+make build
+make install          # installs to ~/.local/bin; override PREFIX/DESTDIR
+```
+
+Or:
+
+```bash
+go install github.com/tianyuxue/clablings/cmd/clablings@latest
+```
+
+## Quick start
+
+The exercises live in a separate repository:
+
+```bash
+git clone https://github.com/tianyuxue/clab-exercises
+clablings list --root ./clab-exercises
+clablings watch --root ./clab-exercises
+```
+
+Set `CLABLINGS_ROOT` to avoid passing `--root` every time:
+
+```bash
+export CLABLINGS_ROOT="$PWD/clab-exercises"
+clablings watch
+```
+
+Without `--root` or `CLABLINGS_ROOT`, clablings searches upward from the current
+directory for `clablings.yaml`.
+
+## Commands
+
+```bash
+clablings watch [--root DIR]        # guided exercise loop
 clablings run <exercise_id>         # jump to an exercise
 clablings reset [--hard]            # fast / hard reset
 clablings list [--json]             # progress
-clablings test [<id>|--all] [--answers FILE] [--format text|json]  # headless verification
-clablings debug [--sudo] [--root DIR] # launch clab-tui on this chapter's shared topology
-clablings read [<chapter_id>] [--lang en|zh] # concept + RFC reading slices
-clablings lint [--root DIR]          # validate the library
+clablings test [<id>|--all] [--answers FILE] [--format text|json]
+clablings debug [--sudo] [--root DIR]
+clablings read [<chapter_id>] [--lang en|zh]
+clablings lint [--root DIR]
 ```
 
-The exercise library lives at the repository root `clab-exercises/`; see
-`clab-exercises/README.md` for usage. The design document is at
-`docs/superpowers/specs/2026-09-17-clablings-design.md`.
+`clablings test` is the headless verification path for CI. Quiz exercises need
+`--answers FILE`; option indices are **0-based**.
 
 ## Watch keys
 
-Watch prints a context block once per exercise: a progress bar, the exercise
-title, its brief, and the key legend. Actions never reprint it.
+Watch prints a context block once per exercise: title, brief, key legend, and a
+progress bar at the end. Actions do not reprint it.
 
 - `Enter` verify the current exercise (on a quiz: start the quiz)
 - `h` show hints
 - `c` show the chapter's concept and RFC reading slices
-- `p` / `n` go to the previous / next exercise (no status change)
+- `p` / `n` previous / next exercise
 - `Esc` cancel an in-flight verification
 - `r` / `f` hard / fast reset
-- `q` quit (keep containers)
+- `l` open the exercise picker
+- `q` quit and keep containers
 - `x` quit and destroy containers
 - `Ctrl+C` quit
 
-On `quiz` exercises, watch asks you to press `Enter` to start. Then enter option
-numbers (comma-separated for multi-select); wrong answers show explanations and
-re-prompt until correct, then advance. `h`/`c` show help and reprint the
-question (not the legend).
+During a quiz, `h`/`c` show help and `p`/`n`/`l`/`r`/`f`/`q`/`x` keep their
+watch meanings. `l`, `r`, and `f` leave the quiz and reprint the context block;
+press `Enter` to start it again.
 
 ## Configuration
 
-Optional config file `~/.config/clablings/config.yaml`:
+Optional config file at `~/.config/clablings/config.yaml`:
 
 ```yaml
-language: en             # content language: en or zh
+language: zh             # content language: en or zh (default: zh)
 containerlab:
   bin_path: ""          # empty = resolve from PATH
 docker:
@@ -54,29 +155,52 @@ build:
   default_image: gcc:13
 ```
 
-On a read failure or missing field an English warning is printed and the
-default value is used.
+On a read failure or missing field, a warning is printed and the default value is
+used. Language precedence is `--lang` > `CLABLINGS_LANG` > `language` > `zh`.
+CLI labels stay English.
 
 ## Notes
 
 - Labs are isolated per library instance: the lab name is
   `<rootbasename>-<sha1(abs root)[:8]>-<topology name>` (override the instance id
   with `CLABLINGS_INSTANCE`). Container names are `clab-<lab>-<node>`.
-- Because this containerlab build ignores `--name` on `destroy`/`redeploy`, each
-  deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
-  original (gitignored in the library repo) and runs containerlab against it.
-  The library directory must therefore be writable.
-- `clablings debug` execs `clab-tui` as the current user; pass `--sudo` to launch
-  it via `sudo <clab-tui> --file <derived>` (root). The first `sudo` may prompt
-  for a password in the same terminal.
-- Running clablings with `sudo` makes `git checkout` and the derived topology
-  root-owned; run `sudo chown -R "$USER" <library>` afterwards if you need to
-  edit the library as your normal user.
-- Containers deployed by older builds (static topology names) are not matched by
-  the instance-derived destroy; remove them with `containerlab destroy -t <topology>`.
-- Content language defaults to English; select Chinese with `--lang zh`,
-  `CLABLINGS_LANG=zh`, or `language: zh` in the config file (precedence in that
-  order). CLI labels stay English. `clablings read` shows a chapter's concept
-  and RFC reading slices.
-- Install with `make install` (defaults to `~/.local/bin`; override with
-  `PREFIX=...`/`DESTDIR=...`). Ensure the destination is on your `PATH`.
+- Each deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
+  original, so the library directory must be writable. The derived file is
+  gitignored in `clab-exercises`.
+- `clablings debug` execs `clab-tui` as the current user. Pass `--sudo` to launch
+  it via `sudo <clab-tui> --file <derived>`.
+- Running clablings with `sudo` can leave derived files and git checkouts
+  root-owned; run `sudo chown -R "$USER" <library>` afterwards if needed.
+- Content language defaults to Chinese. Use `--lang en`, `CLABLINGS_LANG=en`, or
+  `language: en` for English.
+
+## Content
+
+The exercise library is maintained at
+[tianyuxue/clab-exercises](https://github.com/tianyuxue/clab-exercises). See its
+README for chapter coverage, images, and content authoring rules.
+
+## Development
+
+```bash
+make test              # go test ./... -count=1
+make lint              # go vet + staticcheck when installed
+make build             # static pure-Go binary
+make package           # linux/amd64 + linux/arm64 release archives
+make test-integration  # root + Docker + containerlab
+```
+
+`make test-integration` is privileged and requires a working Docker daemon,
+containerlab, and the images listed in `clab-exercises/README.md`. The GitHub
+Integration workflow is disabled by default; set the repository variable
+`ENABLE_PRIVILEGED_CI=true` once a self-hosted runner is available.
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a PR, run `go test ./...`
+and `go vet ./...`. See [SECURITY.md](SECURITY.md) for private vulnerability
+reporting.
+
+## License
+
+[Apache-2.0](LICENSE).

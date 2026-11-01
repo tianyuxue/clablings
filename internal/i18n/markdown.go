@@ -1,4 +1,4 @@
-// Package i18n checks that localized content stays structurally in sync.
+// Package i18n checks that localized content keeps the same technical facts.
 package i18n
 
 import (
@@ -17,46 +17,25 @@ type codeBlock struct {
 }
 
 type docModel struct {
-	headings []int
-	code     []codeBlock
-	inline   []string
-	links    []string
+	code  []codeBlock
+	links []string
 }
 
-// MarkdownParity compares the English and Chinese versions of the same markdown
-// document and reports structural differences. Language-independent parts
-// (code bodies, link destinations) must match exactly; heading text and prose
-// may differ.
-func MarkdownParity(en, zh string) []string {
+// TechnicalParity compares the English and Chinese versions of the same
+// markdown document. Only language-independent technical parts must match:
+// normalized fenced code blocks (as a multiset, order-independent) and link
+// destinations. Headings, prose, paragraph count, and inline code may differ.
+func TechnicalParity(en, zh string) []string {
 	e := parseMarkdown(en)
 	z := parseMarkdown(zh)
 	var p []string
 
-	if len(e.headings) != len(z.headings) {
-		p = append(p, fmt.Sprintf("heading count differs: en=%d zh=%d", len(e.headings), len(z.headings)))
-	} else {
-		for i := range e.headings {
-			if e.headings[i] != z.headings[i] {
-				p = append(p, fmt.Sprintf("heading %d level differs: en=h%d zh=h%d", i+1, e.headings[i], z.headings[i]))
-				break
-			}
-		}
-	}
-
 	if len(e.code) != len(z.code) {
 		p = append(p, fmt.Sprintf("code block count differs: en=%d zh=%d", len(e.code), len(z.code)))
-	} else {
-		for i := range e.code {
-			switch {
-			case e.code[i].lang != z.code[i].lang:
-				p = append(p, fmt.Sprintf("code block %d language differs: en=%q zh=%q", i+1, e.code[i].lang, z.code[i].lang))
-			case e.code[i].body != z.code[i].body:
-				p = append(p, fmt.Sprintf("code block %d body differs from en", i+1))
-			}
-		}
+	} else if !sameCounter(counter(codeKeys(e.code)), counter(codeKeys(z.code))) {
+		p = append(p, "code block content or language differs between en and zh")
 	}
 
-	p = append(p, diffReport("inline code", e.inline, z.inline)...)
 	p = append(p, diffReport("link", e.links, z.links)...)
 	return p
 }
@@ -70,15 +49,11 @@ func parseMarkdown(src string) docModel {
 			return ast.WalkContinue, nil
 		}
 		switch v := n.(type) {
-		case *ast.Heading:
-			m.headings = append(m.headings, v.Level)
 		case *ast.FencedCodeBlock:
 			lang := string(v.Language(data))
 			m.code = append(m.code, codeBlock{lang: lang, body: normalizeCode(blockText(v, data), lang)})
 		case *ast.CodeBlock:
 			m.code = append(m.code, codeBlock{body: normalizeCode(blockText(v, data), "")})
-		case *ast.CodeSpan:
-			m.inline = append(m.inline, spanText(v, data))
 		case *ast.Link:
 			m.links = append(m.links, string(v.Destination))
 		case *ast.Image:
@@ -103,14 +78,12 @@ func blockText(n hasLines, src []byte) string {
 	return b.String()
 }
 
-func spanText(n ast.Node, src []byte) string {
-	var b strings.Builder
-	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-		if t, ok := c.(*ast.Text); ok {
-			b.Write(t.Segment.Value(src))
-		}
+func codeKeys(blocks []codeBlock) []string {
+	keys := make([]string, len(blocks))
+	for i, b := range blocks {
+		keys[i] = b.lang + "\x00" + b.body
 	}
-	return b.String()
+	return keys
 }
 
 // normalizeCode compares code by its commands: comments are prose and may be
@@ -227,4 +200,16 @@ func counter(in []string) map[string]int {
 		m[s]++
 	}
 	return m
+}
+
+func sameCounter(a, b map[string]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, n := range a {
+		if b[k] != n {
+			return false
+		}
+	}
+	return true
 }

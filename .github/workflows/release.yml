@@ -1,0 +1,49 @@
+name: Release
+
+# Artifacts use stable, version-free names so the install script and README
+# can link to releases/latest/download without per-release URL changes. The
+# release tag is still embedded in the binary and in the release notes.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish linux binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build local static binary
+        run: make build-static VERSION="${GITHUB_REF_NAME}"
+
+      - name: Verify version
+        run: test "$(./clablings version)" = "clablings ${GITHUB_REF_NAME}"
+
+      - name: Package linux/amd64 and linux/arm64
+        run: make package VERSION="${GITHUB_REF_NAME}"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/clablings_linux_amd64.tar.gz
+            dist/clablings_linux_arm64.tar.gz
+            dist/checksums.txt

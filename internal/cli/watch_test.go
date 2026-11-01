@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -361,11 +362,11 @@ func TestWatchLoopQuizStaysOnFailure(t *testing.T) {
 	lib, st := oneExerciseLibrary(t)
 	lib.Order[0].Type = content.TypeQuiz
 	cfg, _ := config.LoadFrom("")
-	called := 0
+	var called atomic.Int32
 	sess := watch.New(watch.Options{
 		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
 		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
-			called++
+			called.Add(1)
 			return []assert.Result{{Passed: false}}, nil
 		},
 		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
@@ -382,8 +383,8 @@ func TestWatchLoopQuizStaysOnFailure(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- watchLoop(ctx, sess, lib, cfg, "en", keyCh, tick, &out, &out) }()
 	time.Sleep(30 * time.Millisecond)
-	if called != 1 {
-		t.Fatalf("quiz handler called %d times", called)
+	if called.Load() != 1 {
+		t.Fatalf("quiz handler called %d times", called.Load())
 	}
 	cancel()
 	select {
@@ -425,6 +426,137 @@ func TestVerifyAndReloadQuizCanceledQuits(t *testing.T) {
 	}
 }
 
+func TestWatchLoopQuizDoesNotPrintVerifyingStatus(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, watch.ErrQuizAborted
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 1)
+	keyCh <- '\n'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if strings.Contains(out.String(), "verifying") {
+		t.Fatalf("quiz must not print a verifying status:\n%s", out.String())
+	}
+}
+
+func TestWatchLoopQuizResetKeysPause(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "redeploy", err: watch.ErrQuizRedeploy},
+		{name: "fast reset", err: watch.ErrQuizFastReset},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			lib, st := oneExerciseLibrary(t)
+			lib.Order[0].Type = content.TypeQuiz
+			cfg, _ := config.LoadFrom("")
+			sess := watch.New(watch.Options{
+				Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+				Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+					return nil, tt.err
+				},
+				Report: func([]assert.Result) {},
+			})
+			if err := sess.Start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			keyCh := make(chan byte, 4)
+			keyCh <- '\n'
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				keyCh <- 'q'
+			}()
+			var out bytes.Buffer
+			if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+				t.Fatalf("watchLoop: %v", err)
+			}
+			if sess.Current() == nil || sess.Current().FullID() != "c1/e1" {
+				t.Fatalf("current = %v, want c1/e1", sess.Current())
+			}
+			if got := strings.Count(out.String(), "Press Enter to start the quiz."); got < 2 {
+				t.Fatalf("context reprinted %d times, want at least 2:\n%s", got, out.String())
+			}
+		})
+	}
+}
+
+func TestWatchLoopQuizListOpensPicker(t *testing.T) {
+	lib, st := twoChapterWatchLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, watch.ErrQuizList
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- '\n'
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		keyCh <- 'j'  // move from the quiz to c2/e2
+		keyCh <- '\n' // select it
+		keyCh <- 'q'  // quit the watch loop
+	}()
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if sess.Current() == nil || sess.Current().FullID() != "c2/e2" {
+		t.Fatalf("current = %v, want c2/e2", sess.Current())
+	}
+	if len(eng.deployed) != 1 || eng.deployed[0] != "c2" {
+		t.Fatalf("deployed = %v, want [c2]", eng.deployed)
+	}
+}
+
+func TestWatchLoopQuizCleanQuit(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Type = content.TypeQuiz
+	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
+		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
+			return nil, watch.ErrQuizCleanQuit
+		},
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 1)
+	keyCh <- '\n'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if len(eng.destroyed) != 1 || eng.destroyed[0] != "c1" {
+		t.Fatalf("destroyed = %v, want [c1]", eng.destroyed)
+	}
+	if !strings.Contains(out.String(), "containers removed") {
+		t.Fatalf("out = %q, want cleanup notice", out.String())
+	}
+}
+
 func TestWatchLoopEnterStartsQuiz(t *testing.T) {
 	ch := &content.Chapter{ID: "c1"}
 	ex := &content.Exercise{ID: "q1", Chapter: "c1", Type: content.TypeQuiz, ChapterRef: ch}
@@ -433,11 +565,11 @@ func TestWatchLoopEnterStartsQuiz(t *testing.T) {
 		Order: []*content.Exercise{ex}, ByID: map[string]*content.Exercise{"c1/q1": ex}}
 	st, _ := state.Load(lib.Root)
 	cfg, _ := config.LoadFrom("")
-	called := 0
+	var called atomic.Int32
 	sess := watch.New(watch.Options{
 		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
 		Quiz: func(context.Context, *content.Exercise) ([]assert.Result, error) {
-			called++
+			called.Add(1)
 			return []assert.Result{{Passed: true}}, nil
 		},
 		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
@@ -452,8 +584,8 @@ func TestWatchLoopEnterStartsQuiz(t *testing.T) {
 	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
-	if called != 1 {
-		t.Fatalf("quiz handler called %d times", called)
+	if called.Load() != 1 {
+		t.Fatalf("quiz handler called %d times", called.Load())
 	}
 }
 
@@ -729,5 +861,24 @@ func TestPrintContextLayout(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Fatalf("missing %q in:\n%s", want, s)
 		}
+	}
+	if strings.HasPrefix(s, "\n") {
+		t.Fatalf("context must start with the title, got leading newline:\n%s", s)
+	}
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if !strings.Contains(lines[0], "▌") || !strings.Contains(lines[0], "c1 / e1") {
+		t.Fatalf("first line = %q, want the exercise ID with a marker", lines[0])
+	}
+	if !strings.Contains(lines[1], ex.Title) {
+		t.Fatalf("second line = %q, want the exercise title", lines[1])
+	}
+	if last := lines[len(lines)-1]; !strings.Contains(last, "Progress:") {
+		t.Fatalf("last line = %q, want the progress bar", last)
+	}
+	brief := strings.Index(s, "cannot reach each other")
+	legend := strings.Index(s, "[Enter] verify")
+	progress := strings.Index(s, "Progress:")
+	if !(brief < legend && legend < progress) {
+		t.Fatalf("want brief before legend before progress; got brief=%d legend=%d progress=%d:\n%s", brief, legend, progress, s)
 	}
 }

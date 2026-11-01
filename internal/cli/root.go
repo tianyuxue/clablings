@@ -22,24 +22,31 @@ var Version = "dev"
 
 var langFlag string
 
-// locale resolves content language: --lang > CLABLINGS_LANG > config.language > en.
+// defaultLanguage is the content language used when no flag, environment
+// variable, or config file selects one.
+const defaultLanguage = "zh"
+
+// locale resolves content language: --lang > CLABLINGS_LANG > config.language > zh.
 func locale(errOut io.Writer) string {
-	if langFlag != "" {
-		return content.NormalizeLocale(langFlag)
-	}
-	if v := os.Getenv("CLABLINGS_LANG"); v != "" {
-		return content.NormalizeLocale(v)
-	}
-	// Config is read again here (commands may also load it); this keeps the
-	// lookup self-contained at the cost of one extra read.
 	cfg, err := config.Load()
 	if err != nil && errOut != nil {
 		fmt.Fprintf(errOut, "warning: reading config failed, using defaults: %v\n", err)
 	}
+	configured := ""
 	if cfg != nil {
-		return content.NormalizeLocale(cfg.Language)
+		configured = cfg.Language
 	}
-	return content.DefaultLocale
+	return resolveLocale(langFlag, os.Getenv("CLABLINGS_LANG"), configured)
+}
+
+// resolveLocale applies the language precedence, falling back to Chinese.
+func resolveLocale(flag, env, configured string) string {
+	for _, value := range []string{flag, env, configured} {
+		if value != "" {
+			return content.NormalizeLocale(value)
+		}
+	}
+	return defaultLanguage
 }
 
 // NewRootCmd builds the clablings root command.
@@ -59,7 +66,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newDebugCmd())
 	cmd.AddCommand(newReadCmd())
 	cmd.AddCommand(newLintCmd())
-	cmd.PersistentFlags().StringVar(&langFlag, "lang", "", "content language: en or zh (default: en)")
+	cmd.PersistentFlags().StringVar(&langFlag, "lang", "", "content language: en or zh (default: zh)")
 	return cmd
 }
 

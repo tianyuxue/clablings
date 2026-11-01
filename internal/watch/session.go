@@ -98,6 +98,9 @@ func (s *Session) ResetCurrent(ctx context.Context, hard bool) error {
 	if s.current == nil {
 		return nil
 	}
+	if s.current.Type == content.TypeQuiz {
+		return nil
+	}
 	if s.busy {
 		return nil
 	}

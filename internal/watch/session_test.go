@@ -381,6 +381,28 @@ func TestSessionResetCurrentFast(t *testing.T) {
 	}
 }
 
+func TestSessionResetCurrentSkipsQuiz(t *testing.T) {
+	lib := twoChapters()
+	lib.Root = t.TempDir()
+	lib.Order[0].Type = content.TypeQuiz
+	st, _ := state.Load(lib.Root)
+	fr := &fakeReset{}
+	s := New(Options{
+		Library: lib, State: st, Engine: &fakeEngine{}, Reset: fr,
+		Quiz:   func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+	})
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := s.ResetCurrent(context.Background(), true); err != nil {
+		t.Fatalf("ResetCurrent: %v", err)
+	}
+	if len(fr.hard) != 0 || len(fr.fast) != 0 {
+		t.Fatalf("quiz reset should be a no-op: fast=%v hard=%v", fr.fast, fr.hard)
+	}
+}
+
 func TestSessionResetCurrentNil(t *testing.T) {
 	lib := &content.Library{Root: t.TempDir(), ByID: map[string]*content.Exercise{}}
 	st, _ := state.Load(lib.Root)

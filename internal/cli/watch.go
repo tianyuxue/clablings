@@ -129,8 +129,11 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, loc string, byteCh <-chan byte, tick <-chan time.Time, out, errOut io.Writer) error {
 	var w *watch.Watcher
 	shown := ""
-	// refresh prints the context block once per exercise (progress, brief,
-	// legend) and prepares a watcher for it. Actions never reprint it.
+	// keys is the real input channel. A quiz owns it while answering, so the
+	// watch loop must stop selecting on it to avoid stealing and dropping keys.
+	keys := byteCh
+	// refresh prints the context block once per exercise (title, brief,
+	// legend, progress) and prepares a watcher for it. Actions never reprint it.
 	refresh := func() {
 		cur := sess.Current()
 		if cur == nil || cur.FullID() == shown {
@@ -155,8 +158,54 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		shown = ""
 		refresh()
 	}
+	handleList := func() (stop bool, err error) {
+		cur := sess.Current()
+		if cur == nil {
+			return false, nil
+		}
+		id, err := runPicker(ctx, byteCh, out, lib, cur.FullID(), sess.StatusOf)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				forceRefresh()
+				return false, nil
+			}
+			return true, err
+		}
+		if id == "" || id == cur.FullID() {
+			forceRefresh()
+			return false, nil
+		}
+		if err := sess.Run(ctx, id); err != nil {
+			fmt.Fprintf(errOut, "jump error: %v\n", err)
+			forceRefresh()
+			return false, nil
+		}
+		if quit, clean := drainKeys(byteCh); quit || clean {
+			return true, handleQuit(ctx, sess, clean, out, errOut)
+		}
+		refresh()
+		return false, nil
+	}
 	after := func(done bool, err error) (bool, error) {
 		if err != nil {
+			switch {
+			case errors.Is(err, watch.ErrQuizList):
+				return handleList()
+			case errors.Is(err, watch.ErrQuizRedeploy):
+				if rerr := sess.ResetCurrent(ctx, true); rerr != nil {
+					fmt.Fprintf(errOut, "reset error: %v\n", rerr)
+				}
+				forceRefresh()
+				return false, nil
+			case errors.Is(err, watch.ErrQuizFastReset):
+				if rerr := sess.ResetCurrent(ctx, false); rerr != nil {
+					fmt.Fprintf(errOut, "reset error: %v\n", rerr)
+				}
+				forceRefresh()
+				return false, nil
+			case errors.Is(err, watch.ErrQuizCleanQuit):
+				return true, handleQuit(ctx, sess, true, out, errOut)
+			}
 			return true, err
 		}
 		if done || sess.Current() == nil {
@@ -183,10 +232,16 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		if vch != nil {
 			return
 		}
-		writeStatus(out, yellow("→ verifying ...")+dim("  (Esc to cancel)"))
 		vctx, cancel := context.WithCancel(ctx)
 		vcancel = cancel
 		pendingQuit, pendingClean = false, false
+		// A quiz reads stdin directly until it returns; disabling this select
+		// case keeps the watch loop from racing the quiz for input bytes.
+		if cur := sess.Current(); cur != nil && cur.Type == content.TypeQuiz {
+			byteCh = nil
+		} else {
+			writeStatus(out, yellow("→ verifying ...")+dim("  (Esc to cancel)"))
+		}
 		vch = make(chan outcome, 1)
 		go func() {
 			done, err := verifyAndReload(vctx, sess, lib, cfg, out, errOut)
@@ -204,6 +259,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 		case res := <-vch:
 			vch = nil
 			vcancel = nil
+			byteCh = keys
 			if pendingQuit || pendingClean {
 				if res.err != nil {
 					return res.err
@@ -275,31 +331,9 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				}
 				refresh()
 			case watch.KeyList:
-				cur := sess.Current()
-				if cur == nil {
-					continue
-				}
-				id, err := runPicker(ctx, byteCh, out, lib, cur.FullID(), sess.StatusOf)
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
-						forceRefresh()
-						continue
-					}
+				if stop, err := handleList(); stop {
 					return err
 				}
-				if id == "" || id == cur.FullID() {
-					forceRefresh()
-					continue
-				}
-				if err := sess.Run(ctx, id); err != nil {
-					fmt.Fprintf(errOut, "jump error: %v\n", err)
-					forceRefresh()
-					continue
-				}
-				if quit, clean := drainKeys(byteCh); quit || clean {
-					return handleQuit(ctx, sess, clean, out, errOut)
-				}
-				refresh()
 			case watch.KeyRedeploy:
 				if err := sess.ResetCurrent(ctx, true); err != nil {
 					fmt.Fprintf(errOut, "reset error: %v\n", err)
@@ -384,6 +418,9 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 		writeStatus(out, yellow("→ verifying ..."))
 	}
 	if err := sess.VerifyNow(ctx); err != nil {
+		if isQuizControl(err) {
+			return false, err
+		}
 		clearStatus(out)
 		if errors.Is(err, watch.ErrQuizAborted) {
 			fmt.Fprintln(out, "quiz aborted")
@@ -426,18 +463,28 @@ func verifyAndReload(ctx context.Context, sess *watch.Session, lib *content.Libr
 	return false, nil
 }
 
-// printContext renders the once-per-exercise header: progress bar, highlighted
-// title, meta line, task brief, key legend, and a quiz start hint.
+// isQuizControl reports whether err is a watch action requested from quiz
+// input rather than a verification failure.
+func isQuizControl(err error) bool {
+	return errors.Is(err, watch.ErrQuizList) ||
+		errors.Is(err, watch.ErrQuizRedeploy) ||
+		errors.Is(err, watch.ErrQuizFastReset) ||
+		errors.Is(err, watch.ErrQuizCleanQuit)
+}
+
+// printContext renders the once-per-exercise header: the highlighted exercise
+// title, meta line, task brief, key legend, and a quiz start hint. Progress is
+// a dim footer so the title owns the first screenful.
 func printContext(sess *watch.Session, lib *content.Library, ex *content.Exercise, out io.Writer) {
 	idx, total := position(lib, ex)
-	fmt.Fprintf(out, "\n%s %s\n", bold("Progress:"), progressBar(idx, total))
-	fmt.Fprintf(out, " %s %s %s %s\n",
-		cyan("▌"), bold(cyan(ex.ID)), dim("·"), bold(ex.Title))
-	fmt.Fprintf(out, "   %s %s\n", magenta(string(ex.Type)), stars(ex.Difficulty))
+	fmt.Fprintf(out, "%s %s\n", cyan("▌"), dim(strings.Replace(ex.FullID(), "/", " / ", 1)))
+	fmt.Fprintf(out, "  %s\n", bold(cyan(ex.Title)))
+	fmt.Fprintf(out, "  %s %s\n", magenta(string(ex.Type)), stars(ex.Difficulty))
 	if ex.Brief != "" {
 		printBrief(out, ex.Brief)
 	}
 	watch.WriteLegend(out)
+	fmt.Fprintf(out, "\n  %s %s\n", dim("Progress:"), progressBar(idx, total))
 	if ex.Type == content.TypeQuiz {
 		fmt.Fprintln(out, dim("Press Enter to start the quiz."))
 	}

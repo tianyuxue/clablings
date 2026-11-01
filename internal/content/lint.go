@@ -107,18 +107,14 @@ func MissingTranslations(root, locale string) ([]string, error) {
 	return problems, nil
 }
 
-// TranslationParity checks that a locale's content stays structurally in sync
-// with the default locale: markdown parity for concept files, plus a git-based
-// freshness warning when the source was committed more recently.
-func TranslationParity(root, locale string) (problems, warns []string, err error) {
-	return translationParity(root, locale, i18n.GitLastCommit(root))
-}
-
-func translationParity(root, locale string, last i18n.LastCommit) (problems, warns []string, err error) {
+// TranslationParity checks that a locale's concept file exists and keeps the
+// same technical facts as the default locale. Prose structure and inline code
+// may differ; only code blocks and links must match.
+func TranslationParity(root, locale string) (problems []string, err error) {
 	locale = NormalizeLocale(locale)
 	manifest, err := loadManifest(filepath.Join(root, ManifestName))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	for _, rel := range manifest.Chapters {
 		chDir := filepath.Join(root, rel)
@@ -126,11 +122,11 @@ func translationParity(root, locale string, last i18n.LastCommit) (problems, war
 		locPath := filepath.Join(chDir, "concept."+locale+".md")
 		enData, enOK, err := readIfExists(enPath)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		locData, locOK, err := readIfExists(locPath)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		switch {
 		case !enOK && !locOK:
@@ -142,18 +138,11 @@ func translationParity(root, locale string, last i18n.LastCommit) (problems, war
 			problems = append(problems, fmt.Sprintf("%s: concept.%s.md missing", rel, DefaultLocale))
 			continue
 		}
-		for _, p := range i18n.MarkdownParity(string(enData), string(locData)) {
+		for _, p := range i18n.TechnicalParity(string(enData), string(locData)) {
 			problems = append(problems, fmt.Sprintf("%s: concept.%s.md %s", rel, locale, p))
 		}
-		stale, comparable, err := i18n.Stale(last, enPath, locPath)
-		if err != nil {
-			return nil, nil, err
-		}
-		if comparable && stale {
-			warns = append(warns, fmt.Sprintf("%s/concept.%s.md may be outdated (concept.%s.md changed more recently)", rel, locale, DefaultLocale))
-		}
 	}
-	return problems, warns, nil
+	return problems, nil
 }
 
 func readIfExists(path string) ([]byte, bool, error) {

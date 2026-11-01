@@ -1,0 +1,35 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests and static build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run unit tests
+        run: go test ./... -count=1
+
+      - name: Build static binary
+        run: make build-static
+
+      - name: Check static binary
+        run: |
+          file clablings
+          ldd clablings 2>&1 || true

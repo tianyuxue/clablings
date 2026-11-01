@@ -146,12 +146,34 @@ func TestRunQuizHintKeyThenAnswer(t *testing.T) {
 
 func TestReadQuizLineIgnoresLetters(t *testing.T) {
 	var out bytes.Buffer
-	line, err := readQuizLine(context.Background(), feed("a2x\n"), &out, nil)
+	line, err := readQuizLine(context.Background(), feed("a2z\n"), &out, nil)
 	if err != nil || line != "2" {
 		t.Fatalf("line=%q err=%v", line, err)
 	}
-	if bytes.ContainsAny(out.Bytes(), "ax") {
+	if bytes.ContainsAny(out.Bytes(), "az") {
 		t.Fatalf("letters were echoed: %q", out.String())
+	}
+}
+
+func TestReadQuizLineControlKeys(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  error
+	}{
+		{name: "list", input: "l", want: watch.ErrQuizList},
+		{name: "redeploy", input: "r", want: watch.ErrQuizRedeploy},
+		{name: "fast reset", input: "f", want: watch.ErrQuizFastReset},
+		{name: "clean quit", input: "x", want: watch.ErrQuizCleanQuit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			_, err := readQuizLine(context.Background(), feed(tt.input), &out, nil)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("readQuizLine(%q) err = %v, want %v", tt.input, err, tt.want)
+			}
+		})
 	}
 }
 

@@ -37,7 +37,8 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 		return false
 	}
 	answers := make([][]int, len(ex.Questions))
-	fmt.Fprintln(out, dim("Answer with option numbers; multi-select like 1,3. h hint, c concept, p prev, n next, q quit."))
+	fmt.Fprintln(out, dim("Answer with option numbers; multi-select like 1,3."))
+	fmt.Fprintln(out, dim("h hint  c concept  p prev  n next  l list  r redeploy  f fast reset  q quit  x clean quit"))
 	for qi := range ex.Questions {
 		q := &ex.Questions[qi]
 		for {
@@ -74,10 +75,10 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 }
 
 // readQuizLine reads one line, echoing only answer characters (digits, commas,
-// spaces) until Enter. Ctrl+C, q, a closed input stream, or a cancelled context
-// aborts. h/c are passed to help (when non-nil) and return errQuizHelp so the
-// caller redraws the question. Other bytes are ignored; ANSI CSI sequences are
-// skipped.
+// spaces) until Enter. Ctrl+C and q abort; p/n navigate; l/r/f/x are returned
+// as quiz actions for the watch loop. h/c are passed to help (when non-nil) and
+// return errQuizHelp so the caller redraws the question. Other bytes are
+// ignored; ANSI CSI sequences are skipped.
 func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(byte) bool) (string, error) {
 	var buf []byte
 	var pending []byte // bytes of an incomplete UTF-8 rune
@@ -115,6 +116,22 @@ func readQuizLine(ctx context.Context, in <-chan byte, out io.Writer, help func(
 			if b == 'p' || b == 'P' {
 				fmt.Fprintln(out)
 				return "", watch.ErrQuizPrev
+			}
+			if b == 'l' || b == 'L' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizList
+			}
+			if b == 'r' || b == 'R' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizRedeploy
+			}
+			if b == 'f' || b == 'F' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizFastReset
+			}
+			if b == 'x' || b == 'X' {
+				fmt.Fprintln(out)
+				return "", watch.ErrQuizCleanQuit
 			}
 			if help != nil && (b == 'h' || b == 'H' || b == 'c' || b == 'C') {
 				if help(b) {

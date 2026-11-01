@@ -247,7 +247,7 @@ func TestLintConceptParityDrift(t *testing.T) {
 	if err := cmd.Execute(); err == nil {
 		t.Fatalf("expected lint failure for concept drift\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "code block 1") {
+	if !strings.Contains(out.String(), "code block") {
 		t.Fatalf("out = %q", out.String())
 	}
 }

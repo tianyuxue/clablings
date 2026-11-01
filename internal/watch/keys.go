@@ -19,6 +19,15 @@ var (
 	ErrQuizPrev = errors.New("quiz navigate previous")
 )
 
+// ErrQuiz* are returned when a normal watch action is requested from inside an
+// interactive quiz. The watch loop handles them and then reprints the context.
+var (
+	ErrQuizList      = errors.New("quiz list")
+	ErrQuizRedeploy  = errors.New("quiz redeploy")
+	ErrQuizFastReset = errors.New("quiz fast reset")
+	ErrQuizCleanQuit = errors.New("quiz clean quit")
+)
+
 // Key is a recognized watch key press.
 type Key int
 

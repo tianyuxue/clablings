@@ -1,0 +1,60 @@
+name: Integration
+
+# Privileged integration uses a self-hosted runner with root/Docker/
+# containerlab. It is disabled by default so a fresh fork does not queue
+# forever. Set the repository variable ENABLE_PRIVILEGED_CI=true on the
+# upstream repository once a runner is available.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    name: Root, Docker and containerlab integration
+    if: vars.ENABLE_PRIVILEGED_CI == 'true'
+    runs-on: [self-hosted, linux, integration]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify privileged runner prerequisites
+        run: |
+          set -eu
+          test "$(id -u)" -ne 0
+          sudo -n true
+          command -v docker
+          command -v containerlab
+          docker info
+          containerlab version
+          docker image inspect alpine:3.20 >/dev/null
+          docker image inspect gcc:13 >/dev/null
+          uname -a
+
+      - name: Run integration tests
+        run: |
+          set -o pipefail
+          sudo env PATH="$PATH" make test-integration 2>&1 | tee integration.log
+
+      - name: Upload failed integration log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-log
+          path: integration.log
+          if-no-files-found: ignore

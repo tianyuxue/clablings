@@ -58,17 +58,21 @@ uninstall:
 	rm -f $(BINDIR)/$(BINARY)
 	@echo "removed $(BINDIR)/$(BINARY)"
 
-# Cross-compile and package as tar.gz + checksums.txt.
+# Cross-compile and package stable release assets:
+# clablings_linux_amd64.tar.gz, clablings_linux_arm64.tar.gz, checksums.txt.
 package: distclean
 	@mkdir -p $(DIST)
 	@for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; \
-		out=$(DIST)/$(BINARY)_$(VERSION)_$${os}_$${arch}; \
-		echo "building $$out"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) -trimpath -tags netgo,osusergo -ldflags '$(STATIC_LDFLAGS)' -o $$out ./cmd/$(BINARY)/ || exit 1; \
-		tar -C $(DIST) -czf $$out.tar.gz $$(basename $$out); \
-		rm -f $$out; \
-		sha256sum $$out.tar.gz >> $(DIST)/checksums.txt; \
+		name=$(BINARY)_$${os}_$${arch}; \
+		dir=$(DIST)/$$name; \
+		echo "building $$name"; \
+		mkdir -p $$dir; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) -trimpath -tags netgo,osusergo -ldflags '$(STATIC_LDFLAGS)' -o $$dir/$(BINARY) ./cmd/$(BINARY)/ || exit 1; \
+		cp README.md README.zh-CN.md LICENSE $$dir/; \
+		tar -C $(DIST) -czf $(DIST)/$$name.tar.gz $$name || exit 1; \
+		rm -rf $$dir; \
+		(cd $(DIST) && sha256sum $$name.tar.gz >> checksums.txt); \
 	done
 	@echo "packaging complete: $(DIST)/"
 
@@ -90,5 +94,5 @@ help:
 	@echo "  run              make run ARGS=\"list --root ../clab-exercises\""
 	@echo "  install          install to $(BINDIR) (override PREFIX/DESTDIR)"
 	@echo "  uninstall        remove $(BINDIR)/$(BINARY)"
-	@echo "  package          cross-compile and package tar.gz + checksums ($(PLATFORMS))"
+	@echo "  package          cross-compile stable tar.gz + checksums ($(PLATFORMS))"
 	@echo "  clean/distclean  clean up"
