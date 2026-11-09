@@ -5,12 +5,14 @@ GOTEST=go test
 DIST=dist
 PREFIX?=$(HOME)/.local
 BINDIR=$(DESTDIR)$(PREFIX)/bin
+SYSTEM_PREFIX?=/usr/local
+SYSTEM_BINDIR=$(DESTDIR)$(SYSTEM_PREFIX)/bin
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS=-X $(PKG)/internal/cli.Version=$(VERSION)
 STATIC_LDFLAGS=$(LDFLAGS) -s -w
 PLATFORMS?=linux/amd64 linux/arm64
 
-.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install uninstall package clean distclean help
+.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install install-system uninstall package clean distclean help
 
 all: fmt vet test build
 
@@ -53,6 +55,18 @@ install: build
 	install -m 0755 $(BINARY) $(BINDIR)/$(BINARY)
 	@echo "installed $(BINDIR)/$(BINARY)"
 
+# Install to a system path that root's PATH includes. The build still runs as
+# the invoking user; only the install step needs root.
+install-system: build
+	@if [ "$$(id -u)" -eq 0 ]; then \
+		install -d "$(SYSTEM_BINDIR)"; \
+		install -m 0755 "$(BINARY)" "$(SYSTEM_BINDIR)/$(BINARY)"; \
+	else \
+		sudo install -d "$(SYSTEM_BINDIR)"; \
+		sudo install -m 0755 "$(BINARY)" "$(SYSTEM_BINDIR)/$(BINARY)"; \
+	fi
+	@echo "installed $(SYSTEM_BINDIR)/$(BINARY)"
+
 uninstall:
 	$(if $(BINARY),,$(error BINARY is empty))
 	rm -f $(BINDIR)/$(BINARY)
@@ -93,6 +107,7 @@ help:
 	@echo "  tidy             go mod tidy"
 	@echo "  run              make run ARGS=\"list --root ../clab-exercises\""
 	@echo "  install          install to $(BINDIR) (override PREFIX/DESTDIR)"
+	@echo "  install-system   install to $(SYSTEM_BINDIR) via sudo (override SYSTEM_PREFIX/DESTDIR)"
 	@echo "  uninstall        remove $(BINDIR)/$(BINARY)"
 	@echo "  package          cross-compile stable tar.gz + checksums ($(PLATFORMS))"
 	@echo "  clean/distclean  clean up"

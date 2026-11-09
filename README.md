@@ -35,7 +35,9 @@
 - Optional: **clab-tui** on `PATH` for `clablings debug`.
 
 Running labs usually needs root, or containerlab installed with SUID. The exact
-privilege model depends on your containerlab/Docker setup.
+privilege model depends on your containerlab/Docker setup. If you installed
+`clablings` under your home directory, use `clablings watch --sudo` (see Notes)
+instead of `sudo clablings`.
 
 ## Install
 
@@ -74,6 +76,7 @@ git clone https://github.com/tianyuxue/clablings
 cd clablings
 make build
 make install          # installs to ~/.local/bin; override PREFIX/DESTDIR
+make install-system   # installs to /usr/local/bin via sudo
 ```
 
 Or:
@@ -168,7 +171,14 @@ CLI labels stay English.
   original, so the library directory must be writable. The derived file is
   gitignored in `clab-exercises`.
 - `clablings debug` execs `clab-tui` as the current user. Pass `--sudo` to launch
-  it via `sudo <clab-tui> --file <derived>`.
+  it via `sudo <clab-tui> --file <derived>`. This local flag keeps its meaning:
+  it does not elevate `clablings` itself.
+- `sudo` resets `PATH`, so `sudo clablings` cannot find a binary installed under
+  `~/.local/bin`. Either install to `/usr/local/bin` (`make install-system` or
+  the manual install above), or use the global `--sudo` flag:
+  `clablings watch --sudo` re-executes the current binary through `sudo` using
+  its absolute path. `--sudo` works on every command and preserves
+  `CLABLINGS_ROOT`, `CLABLINGS_INSTANCE`, and `CLABLINGS_LANG`.
 - Running clablings with `sudo` can leave derived files and git checkouts
   root-owned; run `sudo chown -R "$USER" <library>` afterwards if needed.
 - Content language defaults to Chinese. Use `--lang en`, `CLABLINGS_LANG=en`, or

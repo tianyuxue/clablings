@@ -149,3 +149,7 @@ case ":${PATH}:" in
 	*":${BINDIR}:"*) ;;
 	*) echo "note: add ${BINDIR} to PATH to run clablings from any directory" ;;
 esac
+case "${BINDIR}" in
+	"${HOME}"/*)
+		echo "note: sudo resets PATH; for root runs use 'clablings --sudo' or --bindir /usr/local/bin" ;;
+esac

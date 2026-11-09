@@ -28,7 +28,7 @@
 - 从源码构建需要 Go **1.25**。
 - 可选：**clab-tui** 在 `PATH` 上，供 `clablings debug` 使用。
 
-跑实验通常需要 root，或者给 containerlab 配 SUID。具体权限模型取决于你的 containerlab/Docker 安装方式。
+跑实验通常需要 root，或者给 containerlab 配 SUID。具体权限模型取决于你的 containerlab/Docker 安装方式。如果 clablings 装在用户目录，用 `clablings watch --sudo`（见“说明”），不要直接 `sudo clablings`。
 
 ## 安装
 
@@ -65,6 +65,7 @@ git clone https://github.com/tianyuxue/clablings
 cd clablings
 make build
 make install          # 默认装到 ~/.local/bin，可用 PREFIX/DESTDIR 覆盖
+make install-system   # 装到 /usr/local/bin，安装步骤自动用 sudo
 ```
 
 也可以直接：
@@ -147,7 +148,8 @@ build:
 
 - 每个题库实例的 lab 名是 `<rootbasename>-<sha1(abs root)[:8]>-<topology name>`，可以用 `CLABLINGS_INSTANCE` 覆盖实例 ID。容器名是 `clab-<lab>-<node>`。
 - 每次部署都会在原始拓扑旁生成 `clablings.<lab>.clab.yml`，所以题库目录必须可写。这个文件在 `clab-exercises` 里已经 gitignore。
-- `clablings debug` 会以当前用户启动 `clab-tui`；加 `--sudo` 时会用 `sudo <clab-tui> --file <derived>` 启动。
+- `clablings debug` 会以当前用户启动 `clab-tui`；加 `--sudo` 时会用 `sudo <clab-tui> --file <derived>` 启动。这个局部 flag 的语义不变：不会提升 clablings 本身。
+- `sudo` 会重置 `PATH`，所以装在 `~/.local/bin` 的 `clablings` 用 `sudo clablings` 是找不到的。要么装到 `/usr/local/bin`（`make install-system` 或上面的手动安装），要么用全局 `--sudo`：`clablings watch --sudo` 会用当前二进制的绝对路径通过 sudo 重新执行自己。`--sudo` 适用于所有命令，并保留 `CLABLINGS_ROOT`、`CLABLINGS_INSTANCE`、`CLABLINGS_LANG`。
 - 用 `sudo` 跑 clablings 可能让派生拓扑和 git checkout 变成 root 所有；需要的话跑 `sudo chown -R "$USER" <library>` 改回来。
 - 内容默认中文。切英文用 `--lang en`、`CLABLINGS_LANG=en`，或配置里写 `language: en`。
 
