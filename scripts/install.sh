@@ -151,5 +151,5 @@ case ":${PATH}:" in
 esac
 case "${BINDIR}" in
 	"${HOME}"/*)
-		echo "note: sudo resets PATH; for root runs use 'clablings --sudo' or --bindir /usr/local/bin" ;;
+		echo "note: sudo resets PATH; for root runs use 'clablings watch --sudo' or install with 'sudo ./install.sh --bindir /usr/local/bin'" ;;
 esac

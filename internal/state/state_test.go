@@ -18,6 +18,26 @@ func TestLoadMissingReturnsFresh(t *testing.T) {
 	}
 }
 
+func TestInvokerIDs(t *testing.T) {
+	t.Setenv("SUDO_UID", "1000")
+	t.Setenv("SUDO_GID", "1001")
+	uid, gid, ok := invokerIDs()
+	if !ok || uid != 1000 || gid != 1001 {
+		t.Fatalf("invokerIDs = (%d, %d, %v), want (1000, 1001, true)", uid, gid, ok)
+	}
+
+	t.Setenv("SUDO_UID", "not-a-number")
+	if _, _, ok := invokerIDs(); ok {
+		t.Fatal("invokerIDs accepted a non-numeric SUDO_UID")
+	}
+
+	t.Setenv("SUDO_UID", "")
+	t.Setenv("SUDO_GID", "")
+	if _, _, ok := invokerIDs(); ok {
+		t.Fatal("invokerIDs accepted missing env vars")
+	}
+}
+
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	st, _ := Load(dir)

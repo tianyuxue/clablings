@@ -76,7 +76,7 @@ git clone https://github.com/tianyuxue/clablings
 cd clablings
 make build
 make install          # installs to ~/.local/bin; override PREFIX/DESTDIR
-make install-system   # installs to /usr/local/bin via sudo
+make install-system   # installs to /usr/local/bin; do not prefix with sudo
 ```
 
 Or:
@@ -170,15 +170,21 @@ CLI labels stay English.
 - Each deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
   original, so the library directory must be writable. The derived file is
   gitignored in `clab-exercises`.
-- `clablings debug` execs `clab-tui` as the current user. Pass `--sudo` to launch
-  it via `sudo <clab-tui> --file <derived>`. This local flag keeps its meaning:
-  it does not elevate `clablings` itself.
+- `clablings debug` execs `clab-tui` as the current user. A trailing `--sudo`
+  launches it via `sudo <clab-tui> --file <derived>` and does not elevate
+  `clablings` itself; put `--sudo` before the subcommand
+  (`clablings --sudo debug`) to run clablings as root.
 - `sudo` resets `PATH`, so `sudo clablings` cannot find a binary installed under
   `~/.local/bin`. Either install to `/usr/local/bin` (`make install-system` or
   the manual install above), or use the global `--sudo` flag:
   `clablings watch --sudo` re-executes the current binary through `sudo` using
-  its absolute path. `--sudo` works on every command and preserves
-  `CLABLINGS_ROOT`, `CLABLINGS_INSTANCE`, and `CLABLINGS_LANG`.
+  its absolute path. The global flag works before or after every command except
+  `debug` and preserves `CLABLINGS_ROOT`, `CLABLINGS_INSTANCE`, and
+  `CLABLINGS_LANG`.
+- Elevated runs read root's config (`/root/.config/clablings/config.yaml`). The
+  content language is forwarded automatically, but
+  `containerlab.bin_path`/`docker.bin_path` and `build.default_image` must be
+  configured for root or available on root's `PATH`.
 - Running clablings with `sudo` can leave derived files and git checkouts
   root-owned; run `sudo chown -R "$USER" <library>` afterwards if needed.
 - Content language defaults to Chinese. Use `--lang en`, `CLABLINGS_LANG=en`, or

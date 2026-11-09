@@ -80,6 +80,15 @@ func NewRootCmd() *cobra.Command {
 
 // Execute runs the root command and returns the process exit code to main.
 func Execute() int {
+	// A --sudo before the subcommand elevates clablings itself. A --sudo after
+	// `debug` keeps its local meaning (launch clab-tui via sudo), so it must not
+	// be pre-parsed here.
+	if shouldElevate(os.Args[1:], os.Geteuid()) {
+		if err := elevate(os.Args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "clablings: error: %v\n", err)
+			return 1
+		}
+	}
 	root := NewRootCmd()
 	if err := root.Execute(); err != nil {
 		var ec *exitCodeError

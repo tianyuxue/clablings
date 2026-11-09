@@ -7,12 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/tianyuxue/clablings/internal/config"
 )
 
 // sudoEnvVars are the clablings environment variables that must survive the
 // sudo re-exec. sudo resets the environment, so these are passed as explicit
-// VAR=value arguments; PATH is deliberately not preserved, so the root process
-// cannot resolve containerlab or docker from a user-writable directory.
+// VAR=value arguments. We deliberately do not forward PATH: sudo's default
+// env_reset keeps root's PATH, so a root process cannot resolve containerlab
+// or docker from a user-writable directory.
 var sudoEnvVars = []string{"CLABLINGS_ROOT", "CLABLINGS_INSTANCE", "CLABLINGS_LANG"}
 
 // elevate re-executes the current command as root via sudo. It replaces the
@@ -30,22 +33,77 @@ func elevate(args []string) error {
 		return fmt.Errorf("re-running as root: sudo not found in PATH: %w", err)
 	}
 
-	argv := []string{"sudo"}
+	env := make(map[string]string, len(sudoEnvVars)+1)
 	for _, key := range sudoEnvVars {
 		if value, ok := os.LookupEnv(key); ok && value != "" {
+			env[key] = value
+		}
+	}
+	// sudo switches HOME to /root, so the user's config language would be
+	// lost. Resolve it before the re-exec and forward it explicitly; an
+	// explicit --lang in the child args still takes precedence.
+	env["CLABLINGS_LANG"] = effectiveLocale()
+
+	return syscall.Exec(sudo, sudoArgv(exe, args, env), os.Environ())
+}
+
+// sudoArgv builds the sudo command line: sudo, the forwarded env assignments,
+// the absolute clablings path, and the original args without --sudo.
+func sudoArgv(exe string, args []string, env map[string]string) []string {
+	argv := []string{"sudo"}
+	for _, key := range sudoEnvVars {
+		if value := env[key]; value != "" {
 			argv = append(argv, key+"="+value)
 		}
 	}
 	argv = append(argv, exe)
-	argv = append(argv, stripSudoFlag(args)...)
-	return syscall.Exec(sudo, argv, os.Environ())
+	return append(argv, stripSudoFlag(args)...)
+}
+
+// effectiveLocale resolves the locale the user would get without elevation.
+func effectiveLocale() string {
+	cfg, _ := config.Load()
+	configured := ""
+	if cfg != nil {
+		configured = cfg.Language
+	}
+	return resolveLocale(langFlag, os.Getenv("CLABLINGS_LANG"), configured)
+}
+
+// shouldElevate reports whether the global --sudo appears before the
+// subcommand. A --sudo after the subcommand belongs to that command; for
+// `debug` it keeps its local clab-tui meaning.
+func shouldElevate(args []string, euid int) bool {
+	if euid == 0 {
+		return false
+	}
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--sudo" {
+			return true
+		}
+		if strings.HasPrefix(arg, "--sudo=") {
+			return !strings.EqualFold(strings.TrimPrefix(arg, "--sudo="), "false")
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return false
+		}
+	}
+	return false
 }
 
 // stripSudoFlag removes --sudo and --sudo=... from args so the re-executed
-// process does not try to elevate itself again.
+// process does not try to elevate itself again. Everything after a `--`
+// delimiter is positional and is preserved verbatim.
 func stripSudoFlag(args []string) []string {
 	out := make([]string, 0, len(args))
-	for _, arg := range args {
+	for i, arg := range args {
+		if arg == "--" {
+			out = append(out, args[i:]...)
+			return out
+		}
 		if arg == "--sudo" || strings.HasPrefix(arg, "--sudo=") {
 			continue
 		}

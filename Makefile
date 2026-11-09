@@ -12,7 +12,7 @@ LDFLAGS=-X $(PKG)/internal/cli.Version=$(VERSION)
 STATIC_LDFLAGS=$(LDFLAGS) -s -w
 PLATFORMS?=linux/amd64 linux/arm64
 
-.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install install-system uninstall package clean distclean help
+.PHONY: all build build-static build-dynamic test test-integration vet lint fmt tidy run install install-system check-not-sudo uninstall package clean distclean help
 
 all: fmt vet test build
 
@@ -56,8 +56,15 @@ install: build
 	@echo "installed $(BINDIR)/$(BINARY)"
 
 # Install to a system path that root's PATH includes. The build still runs as
-# the invoking user; only the install step needs root.
-install-system: build
+# the invoking user; only the install step needs root. Do not prefix the whole
+# make invocation with sudo, or the build artifacts become root-owned.
+check-not-sudo:
+	@if [ -n "$${SUDO_USER:-}" ]; then \
+		echo "install-system: run without sudo; only the install step uses sudo" >&2; \
+		exit 1; \
+	fi
+
+install-system: check-not-sudo build
 	@if [ "$$(id -u)" -eq 0 ]; then \
 		install -d "$(SYSTEM_BINDIR)"; \
 		install -m 0755 "$(BINARY)" "$(SYSTEM_BINDIR)/$(BINARY)"; \
