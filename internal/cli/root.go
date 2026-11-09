@@ -21,6 +21,7 @@ func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.co
 var Version = "dev"
 
 var langFlag string
+var sudoFlag bool
 
 // defaultLanguage is the content language used when no flag, environment
 // variable, or config file selects one.
@@ -56,6 +57,12 @@ func NewRootCmd() *cobra.Command {
 		Short:         "Interactive network practice and protocol mastery platform",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			if !sudoFlag || os.Geteuid() == 0 {
+				return nil
+			}
+			return elevate(os.Args[1:])
+		},
 	}
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newListCmd())
@@ -67,6 +74,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(newReadCmd())
 	cmd.AddCommand(newLintCmd())
 	cmd.PersistentFlags().StringVar(&langFlag, "lang", "", "content language: en or zh (default: zh)")
+	cmd.PersistentFlags().BoolVar(&sudoFlag, "sudo", false, "re-run this command as root via sudo")
 	return cmd
 }
 
