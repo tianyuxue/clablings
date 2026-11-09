@@ -19,9 +19,15 @@ import (
 	"github.com/tianyuxue/clablings/internal/watch"
 )
 
-type fakeWatchEngine struct{ deployed, destroyed []string }
+type fakeWatchEngine struct {
+	deployed, destroyed []string
+	deployErr           error
+}
 
 func (f *fakeWatchEngine) Deploy(_ context.Context, ch *content.Chapter) error {
+	if f.deployErr != nil {
+		return f.deployErr
+	}
 	f.deployed = append(f.deployed, ch.ID)
 	return nil
 }
@@ -844,6 +850,74 @@ func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
 	}
 	if len(eng.deployed) != 2 || eng.deployed[1] != "c2" {
 		t.Fatalf("deployed = %v, want [c1 c2]", eng.deployed)
+	}
+}
+
+func TestWatchLoopListCurrentExerciseShowsHint(t *testing.T) {
+	lib, st := twoChapterWatchLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- 'l'
+	keyCh <- '\r' // Enter on the current exercise
+	keyCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	if !strings.Contains(out.String(), "already on c1/e1") {
+		t.Fatalf("missing same-exercise hint:\n%s", out.String())
+	}
+}
+
+func TestWatchLoopListJumpPrivilegeErrorShowsHint(t *testing.T) {
+	lib, st := twoChapterWatchLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	eng := &fakeWatchEngine{}
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: eng, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	eng.deployErr = errors.New("containerlab deploy failed (code=1): This containerlab command requires root privileges or root via SUID to run")
+	keyCh := make(chan byte, 8)
+	keyCh <- 'l'
+	keyCh <- 'j'
+	keyCh <- '\r'
+	keyCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "needs root") || !strings.Contains(s, "clablings watch --sudo") {
+		t.Fatalf("missing privileged-jump hint:\n%s", s)
+	}
+	progress := strings.LastIndex(s, "Progress:")
+	hint := strings.Index(s, "needs root")
+	if hint < progress {
+		t.Fatalf("hint must follow the redrawn context (progress=%d hint=%d):\n%s", progress, hint, s)
+	}
+}
+
+func TestWriteJumpErrorGeneric(t *testing.T) {
+	var out bytes.Buffer
+	writeJumpError(&out, "c2/e2", errors.New("boom"))
+	if !strings.Contains(out.String(), "jump to c2/e2 failed: boom") {
+		t.Fatalf("generic jump error = %q", out.String())
+	}
+	if strings.Contains(out.String(), "--sudo") {
+		t.Fatalf("generic error must not claim a root failure: %q", out.String())
 	}
 }
 

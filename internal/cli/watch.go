@@ -171,13 +171,20 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 			}
 			return true, err
 		}
-		if id == "" || id == cur.FullID() {
+		if id == "" {
 			forceRefresh()
 			return false, nil
 		}
-		if err := sess.Run(ctx, id); err != nil {
-			fmt.Fprintf(errOut, "jump error: %v\n", err)
+		if id == cur.FullID() {
 			forceRefresh()
+			fmt.Fprintln(out, dim("already on "+id+"; use j/k to pick another exercise"))
+			return false, nil
+		}
+		if err := sess.Run(ctx, id); err != nil {
+			// Redraw first so the failure is the last thing on screen instead
+			// of scrolling away above the refreshed context.
+			forceRefresh()
+			writeJumpError(out, id, err)
 			return false, nil
 		}
 		if quit, clean := drainKeys(byteCh); quit || clean {
@@ -470,6 +477,28 @@ func isQuizControl(err error) bool {
 		errors.Is(err, watch.ErrQuizRedeploy) ||
 		errors.Is(err, watch.ErrQuizFastReset) ||
 		errors.Is(err, watch.ErrQuizCleanQuit)
+}
+
+// writeJumpError reports a failed jump after the context has been redrawn, so
+// the message stays visible at the bottom of the screen. Privilege failures
+// get an actionable sudo hint instead of a raw containerlab error.
+func writeJumpError(w io.Writer, id string, err error) {
+	if isPrivilegeError(err) {
+		fmt.Fprintf(w, "\n%s jump to %s needs root: %v\n", red("✗"), id, err)
+		fmt.Fprintln(w, "  restart with: "+bold("clablings watch --sudo")+dim("   or configure containerlab SUID"))
+		return
+	}
+	fmt.Fprintf(w, "\n%s jump to %s failed: %v\n", red("✗"), id, err)
+}
+
+// isPrivilegeError reports whether err is containerlab's root-required error.
+// Keep the match narrow so unrelated permission errors are not misreported.
+func isPrivilegeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "requires root privileges") || strings.Contains(s, "root via SUID")
 }
 
 // printContext renders the once-per-exercise header: the highlighted exercise
