@@ -10,6 +10,7 @@ import (
 
 	"github.com/tianyuxue/clablings/internal/content"
 	"github.com/tianyuxue/clablings/internal/engine"
+	"github.com/tianyuxue/clablings/internal/state"
 )
 
 func newDebugCmd() *cobra.Command {
@@ -33,9 +34,9 @@ func newDebugCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch := chapterAt(lib, wd)
+			ch := chapterForInvocation(lib, resolved, wd)
 			if ch == nil {
-				return fmt.Errorf("not inside a chapter directory; run from the chapter containing chapter.yaml")
+				return fmt.Errorf("not inside a chapter directory and no current exercise; run from a chapter or start clablings watch first")
 			}
 			if !ch.HasTopology() {
 				return fmt.Errorf("chapter %s has no topology; clab-tui requires one", ch.ID)
@@ -73,18 +74,50 @@ func newDebugCmd() *cobra.Command {
 	return cmd
 }
 
-// chapterAt returns the chapter whose directory matches dir.
+// chapterForInvocation resolves the chapter for commands launched from the
+// current directory: the enclosing chapter first (so exercise subdirectories
+// work), then the current exercise recorded by watch.
+func chapterForInvocation(lib *content.Library, root, dir string) *content.Chapter {
+	if ch := chapterAt(lib, dir); ch != nil {
+		return ch
+	}
+	st, err := state.Load(root)
+	if err != nil || st == nil || st.Current == "" {
+		return nil
+	}
+	if ex := lib.ByID[st.Current]; ex != nil {
+		return ex.ChapterRef
+	}
+	return nil
+}
+
+// chapterAt returns the chapter whose directory contains dir, walking up from
+// dir. This lets commands run from an exercise subdirectory.
 func chapterAt(lib *content.Library, dir string) *content.Chapter {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil
 	}
+	for {
+		if ch := chapterDir(lib, abs); ch != nil {
+			return ch
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return nil
+		}
+		abs = parent
+	}
+}
+
+// chapterDir returns the chapter whose directory is exactly dir.
+func chapterDir(lib *content.Library, dir string) *content.Chapter {
 	for _, ch := range lib.Chapters {
 		chAbs, err := filepath.Abs(ch.Dir)
 		if err != nil {
 			continue
 		}
-		if chAbs == abs {
+		if chAbs == dir {
 			return ch
 		}
 	}

@@ -170,8 +170,8 @@ CLI labels stay English.
 - Each deploy generates a derived topology `clablings.<lab>.clab.yml` beside the
   original, so the library directory must be writable. The derived file is
   gitignored in `clab-exercises`.
-- `clablings debug` execs `clab-tui` as the current user. A trailing `--sudo`
-  launches it via `sudo <clab-tui> --file <derived>` and does not elevate
+- `clablings debug` execs `clab-tui` as the current user. It resolves the chapter from the enclosing directory (including exercise subdirectories), or from the current exercise in `.clablings_state.json` when run elsewhere; the chapter must have a topology. A trailing `--sudo`
+  launches `clab-tui` via `sudo <clab-tui> --file <derived>` and does not elevate
   `clablings` itself; put `--sudo` before the subcommand
   (`clablings --sudo debug`) to run clablings as root.
 - `sudo` resets `PATH`, so `sudo clablings` cannot find a binary installed under

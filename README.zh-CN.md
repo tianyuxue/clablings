@@ -148,7 +148,7 @@ build:
 
 - 每个题库实例的 lab 名是 `<rootbasename>-<sha1(abs root)[:8]>-<topology name>`，可以用 `CLABLINGS_INSTANCE` 覆盖实例 ID。容器名是 `clab-<lab>-<node>`。
 - 每次部署都会在原始拓扑旁生成 `clablings.<lab>.clab.yml`，所以题库目录必须可写。这个文件在 `clab-exercises` 里已经 gitignore。
-- `clablings debug` 会以当前用户启动 `clab-tui`；`--sudo` 放在子命令后面时，会用 `sudo <clab-tui> --file <derived>` 启动，不会提升 clablings 本身。要让 clablings 本身以 root 运行，把 `--sudo` 放在子命令前面：`clablings --sudo debug`。
+- `clablings debug` 会以当前用户启动 `clab-tui`。它会从所在目录（包括题目的子目录）向上找章节；如果不在章节目录内，就用 `.clablings_state.json` 里当前题所属的章节。章节必须有拓扑。`--sudo` 放在子命令后面时，会用 `sudo <clab-tui> --file <derived>` 启动，不会提升 clablings 本身。要让 clablings 本身以 root 运行，把 `--sudo` 放在子命令前面：`clablings --sudo debug`。
 - `sudo` 会重置 `PATH`，所以装在 `~/.local/bin` 的 `clablings` 用 `sudo clablings` 是找不到的。要么装到 `/usr/local/bin`（`make install-system` 或上面的手动安装），要么用全局 `--sudo`：`clablings watch --sudo` 会用当前二进制的绝对路径通过 sudo 重新执行自己。全局 `--sudo` 放在子命令前后都可以（`debug` 除外），并保留 `CLABLINGS_ROOT`、`CLABLINGS_INSTANCE`、`CLABLINGS_LANG`。
 - 提权后的进程读的是 root 的配置（`/root/.config/clablings/config.yaml`）。内容语言会自动转发；`containerlab.bin_path`/`docker.bin_path` 和 `build.default_image` 需要给 root 配好，或者确保它们在 root 的 `PATH` 上。
 - 用 `sudo` 跑 clablings 可能让派生拓扑和 git checkout 变成 root 所有；需要的话跑 `sudo chown -R "$USER" <library>` 改回来。

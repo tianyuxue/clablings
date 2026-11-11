@@ -16,7 +16,6 @@ import (
 	"golang.org/x/term"
 
 	"github.com/tianyuxue/clablings/internal/content"
-	"github.com/tianyuxue/clablings/internal/state"
 )
 
 func newReadCmd() *cobra.Command {
@@ -45,14 +44,7 @@ func newReadCmd() *cobra.Command {
 				}
 			default:
 				if wd, err := os.Getwd(); err == nil {
-					ch = chapterAt(lib, wd)
-				}
-				if ch == nil {
-					if st, err := state.Load(resolved); err == nil && st.Current != "" {
-						if ex := lib.ByID[st.Current]; ex != nil {
-							ch = ex.ChapterRef
-						}
-					}
+					ch = chapterForInvocation(lib, resolved, wd)
 				}
 				if ch == nil && len(lib.Chapters) > 0 {
 					ch = lib.Chapters[0]

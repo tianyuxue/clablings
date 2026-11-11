@@ -853,6 +853,35 @@ func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
 	}
 }
 
+func TestWatchLoopConceptReprintsLegend(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- 'c'
+	keyCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	s := out.String()
+	if got := strings.Count(s, "[h] hint"); got < 2 {
+		t.Fatalf("legend printed %d times, want at least 2 (initial + after concept):\n%s", got, s)
+	}
+	concept := strings.Index(s, "# c1:")
+	legend := strings.LastIndex(s, "[h] hint")
+	if concept < 0 || legend < concept {
+		t.Fatalf("concept heading at %d, last legend at %d; want legend after concept:\n%s", concept, legend, s)
+	}
+}
+
 func TestWatchLoopListCurrentExerciseShowsHint(t *testing.T) {
 	lib, st := twoChapterWatchLibrary(t)
 	cfg, _ := config.LoadFrom("")

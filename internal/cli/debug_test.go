@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tianyuxue/clablings/internal/engine"
+	"github.com/tianyuxue/clablings/internal/state"
 )
 
 func writeDebugLibrary(t *testing.T) (root string) {
@@ -24,6 +25,7 @@ func writeDebugLibrary(t *testing.T) (root string) {
 	write("clablings.yaml", "version: 1\nchapters:\n  - chapters/c1\n")
 	write("chapters/c1/chapter.yaml", "id: c1\ntitle: t\ntopology: topology.clab.yml\n")
 	write("chapters/c1/topology.clab.yml", "name: static\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:3.20\n")
+	write("chapters/c1/exercises/e1/exercise.yaml", "id: e1\ntitle: t\ntype: config-fix\nassertions:\n  - name: up\n    type: exec\n    node: r1\n    cmd: \"true\"\n")
 	return root
 }
 
@@ -65,6 +67,65 @@ func TestDebugLaunchesClabTuiWithDerivedTopology(t *testing.T) {
 	}
 }
 
+func TestDebugFromExerciseSubdirUsesChapter(t *testing.T) {
+	root := writeDebugLibrary(t)
+	binDir := t.TempDir()
+	rec := filepath.Join(binDir, "args.txt")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + rec + "\n"
+	if err := os.WriteFile(filepath.Join(binDir, "clab-tui"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Chdir(filepath.Join(root, "chapters", "c1", "exercises", "e1"))
+
+	cmd := newDebugCmd()
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("debug from exercise subdir: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(readFile(t, rec)), "\n")
+	if len(lines) != 2 || lines[0] != "--file" {
+		t.Fatalf("clab-tui args = %q", lines)
+	}
+	if filepath.Dir(lines[1]) != filepath.Join(root, "chapters", "c1") {
+		t.Fatalf("derived dir = %q, want chapter dir", filepath.Dir(lines[1]))
+	}
+}
+
+func TestDebugUsesCurrentExerciseFromState(t *testing.T) {
+	root := writeDebugLibrary(t)
+	st, err := state.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SetCurrent("c1/e1")
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	binDir := t.TempDir()
+	rec := filepath.Join(binDir, "args.txt")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + rec + "\n"
+	if err := os.WriteFile(filepath.Join(binDir, "clab-tui"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Chdir(root)
+
+	cmd := newDebugCmd()
+	cmd.SetArgs([]string{"--root", root})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("debug from library root with state: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(readFile(t, rec)), "\n")
+	if len(lines) != 2 || lines[0] != "--file" {
+		t.Fatalf("clab-tui args = %q", lines)
+	}
+	if filepath.Dir(lines[1]) != filepath.Join(root, "chapters", "c1") {
+		t.Fatalf("derived dir = %q, want current exercise's chapter", filepath.Dir(lines[1]))
+	}
+}
+
 func TestDebugErrorsWhenNotInChapter(t *testing.T) {
 	root := writeDebugLibrary(t)
 	t.Chdir(root)
@@ -75,7 +136,6 @@ func TestDebugErrorsWhenNotInChapter(t *testing.T) {
 		t.Fatalf("err = %v, want chapter-dir error", err)
 	}
 }
-
 func TestDebugErrorsOnChapterWithoutTopology(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, s string) {
@@ -159,4 +219,13 @@ func TestDebugSudoErrorsWhenSudoMissing(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "sudo") {
 		t.Fatalf("err = %v, want sudo-not-found error", err)
 	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(b)
 }

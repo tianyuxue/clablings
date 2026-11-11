@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -35,6 +36,79 @@ func TestInvokerIDs(t *testing.T) {
 	t.Setenv("SUDO_GID", "")
 	if _, _, ok := invokerIDs(); ok {
 		t.Fatal("invokerIDs accepted missing env vars")
+	}
+}
+
+func TestCommitStateChownsTempBeforeRename(t *testing.T) {
+	oldEuid, oldChown, oldRename := geteuid, chownFile, renameFile
+	defer func() { geteuid, chownFile, renameFile = oldEuid, oldChown, oldRename }()
+	geteuid = func() int { return 0 }
+	t.Setenv("SUDO_UID", "123")
+	t.Setenv("SUDO_GID", "456")
+
+	var order []string
+	var gotUID, gotGID int
+	chownFile = func(path string, uid, gid int) error {
+		order = append(order, "chown "+path)
+		gotUID, gotGID = uid, gid
+		return nil
+	}
+	renameFile = func(oldPath, newPath string) error {
+		order = append(order, "rename "+oldPath+" -> "+newPath)
+		return nil
+	}
+
+	if err := commitState("/lib/.state.tmp", "/lib/.state"); err != nil {
+		t.Fatalf("commitState: %v", err)
+	}
+	want := []string{"chown /lib/.state.tmp", "rename /lib/.state.tmp -> /lib/.state"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	if gotUID != 123 || gotGID != 456 {
+		t.Fatalf("chown ids = (%d, %d), want (123, 456)", gotUID, gotGID)
+	}
+}
+
+func TestCommitStateSkipsChownOutsideSudo(t *testing.T) {
+	oldEuid, oldChown, oldRename := geteuid, chownFile, renameFile
+	defer func() { geteuid, chownFile, renameFile = oldEuid, oldChown, oldRename }()
+	geteuid = func() int { return 1000 }
+	t.Setenv("SUDO_UID", "123")
+	t.Setenv("SUDO_GID", "456")
+
+	chowned := false
+	chownFile = func(string, int, int) error { chowned = true; return nil }
+	renamed := false
+	renameFile = func(string, string) error { renamed = true; return nil }
+
+	if err := commitState("tmp", "final"); err != nil {
+		t.Fatalf("commitState: %v", err)
+	}
+	if chowned {
+		t.Fatal("non-root run must not chown")
+	}
+	if !renamed {
+		t.Fatal("commitState did not rename")
+	}
+}
+
+func TestCommitStateDoesNotRenameWhenChownFails(t *testing.T) {
+	oldEuid, oldChown, oldRename := geteuid, chownFile, renameFile
+	defer func() { geteuid, chownFile, renameFile = oldEuid, oldChown, oldRename }()
+	geteuid = func() int { return 0 }
+	t.Setenv("SUDO_UID", "123")
+	t.Setenv("SUDO_GID", "456")
+
+	chownFile = func(string, int, int) error { return errors.New("chown failed") }
+	renamed := false
+	renameFile = func(string, string) error { renamed = true; return nil }
+
+	if err := commitState("tmp", "final"); err == nil {
+		t.Fatal("commitState accepted a failed chown")
+	}
+	if renamed {
+		t.Fatal("commitState renamed a file whose owner was not fixed")
 	}
 }
 

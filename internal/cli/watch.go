@@ -320,9 +320,15 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				cur := sess.Current()
 				if cur == nil || cur.ChapterRef == nil {
 					fmt.Fprintln(out, "no concept for this exercise")
-				} else if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
+					continue
+				}
+				if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
 					fmt.Fprintf(errOut, "read error: %v\n", err)
 				}
+				// The concept can be long enough to scroll the once-per-exercise
+				// legend away; reprint it so the hot keys stay discoverable.
+				fmt.Fprintln(out)
+				watch.WriteLegend(out)
 			case watch.KeyNext, watch.KeyPrev:
 				delta := 1
 				if k == watch.KeyPrev {
