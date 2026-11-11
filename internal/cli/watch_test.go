@@ -853,8 +853,10 @@ func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
 	}
 }
 
-func TestWatchLoopConceptReprintsLegend(t *testing.T) {
+func TestWatchLoopConceptReprintsContext(t *testing.T) {
 	lib, st := oneExerciseLibrary(t)
+	lib.Order[0].Title = "Fix the access VLAN"
+	lib.Order[0].Brief = "Make h1 reach h2 across the trunk"
 	cfg, _ := config.LoadFrom("")
 	sess := watch.New(watch.Options{
 		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
@@ -872,13 +874,17 @@ func TestWatchLoopConceptReprintsLegend(t *testing.T) {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	s := out.String()
+	if got := strings.Count(s, "Make h1 reach h2 across the trunk"); got < 2 {
+		t.Fatalf("objective printed %d times, want at least 2 (initial + after concept):\n%s", got, s)
+	}
 	if got := strings.Count(s, "[h] hint"); got < 2 {
 		t.Fatalf("legend printed %d times, want at least 2 (initial + after concept):\n%s", got, s)
 	}
 	concept := strings.Index(s, "# c1:")
+	objective := strings.LastIndex(s, "Make h1 reach h2 across the trunk")
 	legend := strings.LastIndex(s, "[h] hint")
-	if concept < 0 || legend < concept {
-		t.Fatalf("concept heading at %d, last legend at %d; want legend after concept:\n%s", concept, legend, s)
+	if concept < 0 || objective < concept || legend < concept {
+		t.Fatalf("concept=%d objective=%d legend=%d; want objective and legend after concept:\n%s", concept, objective, legend, s)
 	}
 }
 
