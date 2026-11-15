@@ -853,6 +853,45 @@ func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
 	}
 }
 
+func TestWatchLoopHintReprintsLegend(t *testing.T) {
+	lib, st := oneExerciseLibrary(t)
+	ex := lib.Order[0]
+	ex.Title = "Fix the access VLAN"
+	ex.Brief = "Make h1 reach h2 across the trunk"
+	ex.Hints = []string{"check the VLAN on sw1"}
+	cfg, _ := config.LoadFrom("")
+	sess := watch.New(watch.Options{
+		Library: lib, State: st, Engine: &fakeWatchEngine{}, Reset: &fakeWatchReset{},
+		Verify: func(context.Context, *content.Exercise) ([]assert.Result, error) { return nil, nil },
+		Report: func([]assert.Result) {},
+	})
+	if err := sess.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	keyCh := make(chan byte, 8)
+	keyCh <- 'h'
+	keyCh <- 'q'
+	var out bytes.Buffer
+	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+		t.Fatalf("watchLoop: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "check the VLAN on sw1") {
+		t.Fatalf("hint missing:\n%s", s)
+	}
+	if got := strings.Count(s, "Make h1 reach h2 across the trunk"); got != 1 {
+		t.Fatalf("objective printed %d times, want exactly once (hints must not reprint it):\n%s", got, s)
+	}
+	if got := strings.Count(s, "[h] hint"); got < 2 {
+		t.Fatalf("legend printed %d times, want at least 2 (initial + after hint):\n%s", got, s)
+	}
+	hints := strings.Index(s, "hints:")
+	legend := strings.LastIndex(s, "[h] hint")
+	if hints < 0 || legend < hints {
+		t.Fatalf("hints=%d legend=%d; want legend after hints:\n%s", hints, legend, s)
+	}
+}
+
 func TestWatchLoopConceptReprintsContext(t *testing.T) {
 	lib, st := oneExerciseLibrary(t)
 	lib.Order[0].Title = "Fix the access VLAN"

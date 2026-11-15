@@ -316,6 +316,10 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 				startVerify()
 			case watch.KeyHint:
 				watch.WriteHints(out, sess.Current())
+				// Hints can scroll the once-per-exercise legend away; reprint
+				// only the legend, not the title/brief.
+				fmt.Fprintln(out)
+				watch.WriteLegend(out)
 			case watch.KeyConcept:
 				cur := sess.Current()
 				if cur == nil || cur.ChapterRef == nil {
