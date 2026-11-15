@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-15
+
+### Fixed
+
+- `clablings watch` reprints the hot-key legend after showing hints, so the
+  legend is visible again after long hint text. The concept view continues to
+  reprint the full exercise context.
+
 ## [0.2.0] - 2026-11-11
 
 ### Added
