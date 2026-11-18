@@ -1,14 +1,14 @@
 ## Summary
 
-<!-- What does this change do and why? -->
+<!-- 这次改动做了什么，为什么需要它？ -->
 
-## Checklist
+## 检查清单
 
-- [ ] `go test ./...` passes
-- [ ] `go vet ./...` passes
-- [ ] User-facing docs updated (README / `docs/`) if behavior changed
-- [ ] `CHANGELOG.md` updated for notable changes
+- [ ] `go test ./...` 通过
+- [ ] `go vet ./...` 通过
+- [ ] 面向用户的文档已更新 (README / `docs/`) 如果行为发生变化
+- [ ] `CHANGELOG.md` 已为重要变更更新
 
-## Related issues
+## 相关 issue
 
-<!-- e.g. Closes #123 -->
+<!-- 例如：Closes #123 -->

@@ -1,33 +1,32 @@
-name: Bug report
-description: Report a problem with clablings
+name: 错误报告
+description: 报告 clablings 的问题
 title: "bug: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to file a bug. Please do not include secrets or
-        private lab data.
+        感谢提交错误报告。请不要包含密钥或私有实验数据。
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened?
-      description: A clear and concise description of the bug.
+      label: 发生了什么？
+      description: 清晰、简洁地描述问题。
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: 预期行为
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps to reproduce
+      label: 复现步骤
       placeholder: |
-        1. Run `clablings watch --root ...`
-        2. Press ...
+        1. 运行 `clablings watch --root ...`
+        2. 按下……
         3. See error
     validations:
       required: true
