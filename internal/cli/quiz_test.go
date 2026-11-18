@@ -30,7 +30,7 @@ func feed(s string) chan byte {
 
 func TestRunQuizSingleChoice(t *testing.T) {
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("1\n"), &out, singleChoiceQuiz(), "en")
+	results, err := runQuiz(context.Background(), feed("1\n"), &out, singleChoiceQuiz())
 	if err != nil {
 		t.Fatalf("runQuiz: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestRunQuizSingleChoice(t *testing.T) {
 
 func TestRunQuizRetriesUntilCorrect(t *testing.T) {
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("2\n1\n"), &out, singleChoiceQuiz(), "en")
+	results, err := runQuiz(context.Background(), feed("2\n1\n"), &out, singleChoiceQuiz())
 	if err != nil {
 		t.Fatalf("runQuiz: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRunQuizAbort(t *testing.T) {
 	ch <- 0x03
 	close(ch)
 	var out bytes.Buffer
-	if _, err := runQuiz(context.Background(), ch, &out, singleChoiceQuiz(), "en"); !errors.Is(err, watch.ErrQuizAborted) {
+	if _, err := runQuiz(context.Background(), ch, &out, singleChoiceQuiz()); !errors.Is(err, watch.ErrQuizAborted) {
 		t.Fatalf("err = %v, want ErrQuizAborted", err)
 	}
 }
@@ -92,7 +92,7 @@ func multiSelectQuiz() *content.Exercise {
 
 func TestRunQuizMultiSelect(t *testing.T) {
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("1,3\n"), &out, multiSelectQuiz(), "en")
+	results, err := runQuiz(context.Background(), feed("1,3\n"), &out, multiSelectQuiz())
 	if err != nil || !results[0].Passed {
 		t.Fatalf("results=%+v err=%v", results, err)
 	}
@@ -100,7 +100,7 @@ func TestRunQuizMultiSelect(t *testing.T) {
 
 func TestRunQuizMultiSelectPartialRetry(t *testing.T) {
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("1\n1,3\n"), &out, multiSelectQuiz(), "en")
+	results, err := runQuiz(context.Background(), feed("1\n1,3\n"), &out, multiSelectQuiz())
 	if err != nil || !results[0].Passed {
 		t.Fatalf("results=%+v err=%v", results, err)
 	}
@@ -125,7 +125,7 @@ func TestReadQuizLineClosedNoNewlineAborts(t *testing.T) {
 
 func TestRunQuizQuitKeyAborts(t *testing.T) {
 	var out bytes.Buffer
-	_, err := runQuiz(context.Background(), feed("q"), &out, singleChoiceQuiz(), "en")
+	_, err := runQuiz(context.Background(), feed("q"), &out, singleChoiceQuiz())
 	if !errors.Is(err, watch.ErrQuizAborted) {
 		t.Fatalf("err = %v, want ErrQuizAborted", err)
 	}
@@ -135,7 +135,7 @@ func TestRunQuizHintKeyThenAnswer(t *testing.T) {
 	ex := singleChoiceQuiz()
 	ex.Hints = []string{"UNIQUE_HINT_MARKER"}
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("h1\n"), &out, ex, "en")
+	results, err := runQuiz(context.Background(), feed("h1\n"), &out, ex)
 	if err != nil {
 		t.Fatalf("runQuiz: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestReadQuizLineAcceptsFullWidth(t *testing.T) {
 
 func TestRunQuizMultiSelectFullWidth(t *testing.T) {
 	var out bytes.Buffer
-	results, err := runQuiz(context.Background(), feed("１、３\n"), &out, multiSelectQuiz(), "en")
+	results, err := runQuiz(context.Background(), feed("１、３\n"), &out, multiSelectQuiz())
 	if err != nil || !results[0].Passed {
 		t.Fatalf("results=%+v err=%v", results, err)
 	}

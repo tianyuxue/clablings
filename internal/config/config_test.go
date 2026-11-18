@@ -111,7 +111,7 @@ func TestLoadFromInvalidYAML(t *testing.T) {
 	}
 }
 
-func TestLoadFromLanguage(t *testing.T) {
+func TestLoadFromIgnoresRemovedLanguageKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte("language: zh\n"), 0o644); err != nil {
@@ -121,8 +121,8 @@ func TestLoadFromLanguage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
 	}
-	if cfg.Language != "zh" {
-		t.Fatalf("language = %q", cfg.Language)
+	if cfg.Build.DefaultImage != defaultBuildImage {
+		t.Fatalf("defaults not applied: %+v", cfg)
 	}
 }
 

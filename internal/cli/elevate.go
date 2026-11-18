@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-
-	"github.com/tianyuxue/clablings/internal/config"
 )
 
 // sudoEnvVars are the clablings environment variables that must survive the
@@ -16,7 +14,7 @@ import (
 // VAR=value arguments. We deliberately do not forward PATH: sudo's default
 // env_reset keeps root's PATH, so a root process cannot resolve containerlab
 // or docker from a user-writable directory.
-var sudoEnvVars = []string{"CLABLINGS_ROOT", "CLABLINGS_INSTANCE", "CLABLINGS_LANG"}
+var sudoEnvVars = []string{"CLABLINGS_ROOT", "CLABLINGS_INSTANCE"}
 
 // elevate re-executes the current command as root via sudo. It replaces the
 // current process so the terminal, signals, and exit code stay intact.
@@ -39,10 +37,6 @@ func elevate(args []string) error {
 			env[key] = value
 		}
 	}
-	// sudo switches HOME to /root, so the user's config language would be
-	// lost. Resolve it before the re-exec and forward it explicitly; an
-	// explicit --lang in the child args still takes precedence.
-	env["CLABLINGS_LANG"] = effectiveLocale()
 
 	return syscall.Exec(sudo, sudoArgv(exe, args, env), os.Environ())
 }
@@ -58,16 +52,6 @@ func sudoArgv(exe string, args []string, env map[string]string) []string {
 	}
 	argv = append(argv, exe)
 	return append(argv, stripSudoFlag(args)...)
-}
-
-// effectiveLocale resolves the locale the user would get without elevation.
-func effectiveLocale() string {
-	cfg, _ := config.Load()
-	configured := ""
-	if cfg != nil {
-		configured = cfg.Language
-	}
-	return resolveLocale(langFlag, os.Getenv("CLABLINGS_LANG"), configured)
 }
 
 // shouldElevate reports whether the global --sudo appears before the

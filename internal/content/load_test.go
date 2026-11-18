@@ -154,7 +154,7 @@ func TestLoadErrors(t *testing.T) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
-				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: bogus\n")
+				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntitle: t\nbrief: b\ntype: bogus\n")
 			},
 		},
 		{
@@ -163,7 +163,7 @@ func TestLoadErrors(t *testing.T) {
 				writeFile(t, filepath.Join(root, "clablings.yaml"), validManifest)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), validChapter)
 				writeFile(t, filepath.Join(root, "chapters", "c1", "topology.clab.yml"), validTopology)
-				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: code-implement\n")
+				writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "ex1", "exercise.yaml"), "id: ex1\ntitle: t\nbrief: b\ntype: code-implement\n")
 			},
 		},
 		{
@@ -173,7 +173,7 @@ func TestLoadErrors(t *testing.T) {
 				for _, dir := range []string{"c1", "c2"} {
 					writeFile(t, filepath.Join(root, "chapters", dir, "chapter.yaml"), "id: dup\ntitle: t\ntopology: topology.clab.yml\n")
 					writeFile(t, filepath.Join(root, "chapters", dir, "topology.clab.yml"), "name: lab-"+dir+"\ntopology:\n  nodes: {}\n")
-					writeFile(t, filepath.Join(root, "chapters", dir, "exercises", "ex1", "exercise.yaml"), "id: ex1\ntype: config-fix\n")
+					writeFile(t, filepath.Join(root, "chapters", dir, "exercises", "ex1", "exercise.yaml"), "id: ex1\ntitle: t\nbrief: b\ntype: config-fix\n")
 				}
 			},
 		},
@@ -198,7 +198,7 @@ func TestLoadChapterWithoutTopology(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "clablings.yaml"), "version: 1\nchapters:\n  - chapters/c1\n")
 	writeFile(t, filepath.Join(root, "chapters", "c1", "chapter.yaml"), "id: c1\ntitle: Concepts\ntopology: \"\"\n")
-	writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "q1", "exercise.yaml"), "id: q1\ntype: config-fix\n")
+	writeFile(t, filepath.Join(root, "chapters", "c1", "exercises", "q1", "exercise.yaml"), "id: q1\ntitle: t\nbrief: b\ntype: config-fix\n")
 	lib, err := Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -216,5 +216,78 @@ func writeFile(t *testing.T, path, s string) {
 	}
 	if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadPlainHumanText(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: 交换\nobjectives: [甲, 乙]\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ntitle: 修 VLAN\nbrief: 把 PVID 改对\nhints: [看 bridge vlan show]\nassertions:\n  - name: PVID 正确\n    type: exec\n    node: n1\n    cmd: \"true\"\n    hint: 检查 PVID\n",
+	})
+	lib, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	ch := lib.Chapters[0]
+	if ch.Title != "交换" || len(ch.Objectives) != 2 || ch.Objectives[0] != "甲" {
+		t.Fatalf("chapter = %+v", ch)
+	}
+	ex := ch.Exercises[0]
+	if ex.Title != "修 VLAN" || ex.Brief != "把 PVID 改对" || ex.Hints[0] != "看 bridge vlan show" {
+		t.Fatalf("exercise = %+v", ex)
+	}
+	if ex.Assertions[0].Name != "PVID 正确" || ex.Assertions[0].Hint != "检查 PVID" {
+		t.Fatalf("assertion = %+v", ex.Assertions[0])
+	}
+}
+
+func TestLoadRejectsLocalizedMap(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":           "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml": "id: c1\ntitle: {en: Switching, zh: 交换}\n",
+	})
+	if _, err := Load(root); err == nil {
+		t.Fatal("localized map must not parse into a plain string")
+	}
+}
+
+func TestLoadPlainMetadata(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: STP\ndifficulty: 3\ntags: [l2, stp]\nestimated_minutes: 30\nprerequisites: [02-vlan]\nobjectives: [甲, 乙]\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ntitle: t\nbrief: b\ndifficulty: 2\ntags: [stp]\nassertions:\n  - name: x\n    type: exec\n    node: n1\n    cmd: \"true\"\n",
+	})
+	lib, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	ch := lib.Chapters[0]
+	if ch.Difficulty != 3 || len(ch.Tags) != 2 || ch.Tags[0] != "l2" || ch.EstimatedMinutes != 30 || len(ch.Prerequisites) != 1 || ch.Prerequisites[0] != "02-vlan" {
+		t.Fatalf("metadata = %+v", ch)
+	}
+	if len(ch.Objectives) != 2 || ch.Objectives[0] != "甲" {
+		t.Fatalf("objectives = %v", ch.Objectives)
+	}
+	if ex := ch.Exercises[0]; ex.Difficulty != 2 || len(ex.Tags) != 1 || ex.Tags[0] != "stp" {
+		t.Fatalf("exercise metadata = %+v", ex)
+	}
+}
+
+func TestLoadExerciseNilAssertions(t *testing.T) {
+	root := writeLib(t, map[string]string{
+		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\ntopology: topology.clab.yml\n",
+		"chapters/c1/topology.clab.yml":          "name: lab-c1\ntopology:\n  nodes: {}\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: config-fix\ntitle: t\nbrief: b\n",
+	})
+	lib, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := lib.Chapters[0].Exercises[0].Assertions; got != nil {
+		t.Fatalf("assertions = %v, want nil", got)
 	}
 }

@@ -1,39 +1,38 @@
 package content
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestMissingTranslations(t *testing.T) {
+func TestLegacyLocalizedFiles(t *testing.T) {
 	root := writeLib(t, map[string]string{
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
-		"chapters/c1/chapter.yaml":               "id: c1\ntitle: {en: Switching, zh: 交换}\nobjectives:\n  en: [a]\n  zh: [甲]\n",
-		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: quiz\ntitle: {en: t, zh: t}\nhints:\n  - en: only english\nquestions:\n  - prompt: {en: p, zh: p}\n    options:\n      - text: {en: a, zh: a}\n        correct: true\n        explanation: {en: why}\n      - text: {en: b, zh: b}\n",
+		"chapters/c1/chapter.yaml":               "id: c1\ntitle: 交换\n",
+		"chapters/c1/concept.md":                 "# 交换\n",
+		"chapters/c1/reading.yaml":               "- title: RFC\n",
+		"chapters/c1/exercises/e1/exercise.yaml": "id: e1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options: [{text: a, correct: true}, {text: b}]\n",
+		"chapters/c1/exercises/e1/README.md":     "# 题\n",
+		"chapters/c1/exercises/e2/exercise.yaml": "id: e2\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options: [{text: a, correct: true}, {text: b}]\n",
+		"chapters/c1/exercises/e2/README.en.md":  "# Quiz\n",
+		"chapters/c1/exercises/e2/README.zh.md":  "# 题目\n",
+		"chapters/c1/concept.en.md":              "# Switching\n",
+		"chapters/c1/concept.zh.md":              "# 交换\n",
+		"chapters/c1/reading.en.yaml":            "- title: RFC\n",
 	})
-	warns, err := MissingTranslations(root, "zh")
+	problems, err := LegacyLocalizedFiles(root)
 	if err != nil {
-		t.Fatalf("MissingTranslations: %v", err)
+		t.Fatalf("LegacyLocalizedFiles: %v", err)
 	}
-	joined := ""
-	for _, w := range warns {
-		joined += w + "\n"
-	}
-	for _, want := range []string{"hint 1 missing zh", "option 1 explanation missing zh"} {
-		if !contains(joined, want) {
+	joined := strings.Join(problems, "\n")
+	for _, want := range []string{"concept.en.md", "concept.zh.md", "README.en.md", "README.zh.md", "reading.en.yaml"} {
+		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in:\n%s", want, joined)
 		}
 	}
-	// b has no explanation authored at all -> must not warn for it
-	if contains(joined, "option 2 explanation") {
-		t.Fatalf("unexpected warning for absent explanation:\n%s", joined)
-	}
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (func() bool {
-		for i := 0; i+len(sub) <= len(s); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
+	for _, clean := range []string{"concept.md", "README.md", "reading.yaml"} {
+		if strings.Contains(joined, clean+":") {
+			t.Fatalf("false positive for %q:\n%s", clean, joined)
 		}
-		return false
-	})()
+	}
 }

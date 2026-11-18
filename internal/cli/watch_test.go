@@ -46,7 +46,7 @@ func (f *fakeWatchReset) Hard(_ context.Context, ex *content.Exercise) error { r
 
 func oneExerciseLibrary(t *testing.T) (*content.Library, *state.State) {
 	t.Helper()
-	ch := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab"}
+	ch := &content.Chapter{ID: "c1", Title: "交换", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab"}
 	ex := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch}
 	lib := &content.Library{
 		Root:     t.TempDir(),
@@ -107,7 +107,7 @@ func TestWatchLoopEnterCompletes(t *testing.T) {
 	keyCh <- '\n'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "all exercises complete") {
@@ -135,7 +135,7 @@ func TestWatchLoopVerifyErrorDoesNotPanic(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(ctx, sess, lib, cfg, "en", keyCh, tick, &out, &errOut) }()
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, keyCh, tick, &out, &errOut) }()
 
 	time.Sleep(20 * time.Millisecond) // let enter be processed
 	tick <- time.Now()                // previously panicked on the nil watcher
@@ -230,7 +230,7 @@ func TestMakeVerifierBuildRequiresRebuilder(t *testing.T) {
 }
 
 func TestMakeVerifierTopologyError(t *testing.T) {
-	ch := &content.Chapter{ID: "c1", TopologyPath: filepath.Join(t.TempDir(), "missing.clab.yml")}
+	ch := &content.Chapter{ID: "c1", Title: "交换", TopologyPath: filepath.Join(t.TempDir(), "missing.clab.yml")}
 	ex := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch,
 		Assertions: []content.Assertion{{Name: "x", Type: "file", Source: "missing"}}}
 	eng := engine.New("containerlab", "docker")
@@ -260,7 +260,7 @@ func TestWatchLoopHintAndCleanQuit(t *testing.T) {
 	tick := make(chan time.Time)
 	var out bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out) }()
+	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -291,7 +291,7 @@ func TestWatchLoopQuitNotice(t *testing.T) {
 	keyCh <- 'q'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "containers kept running") {
@@ -305,7 +305,7 @@ func TestWatchLoopConceptKey(t *testing.T) {
 	if err := os.MkdirAll(chDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(chDir, "concept.en.md"), []byte("# Switching\n\nwhy L2.\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(chDir, "concept.md"), []byte("# Switching\n\nwhy L2.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	lib, st := oneExerciseLibrary(t)
@@ -323,7 +323,7 @@ func TestWatchLoopConceptKey(t *testing.T) {
 	keyCh <- 'q'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "why L2.") {
@@ -387,7 +387,7 @@ func TestWatchLoopQuizStaysOnFailure(t *testing.T) {
 	tick := make(chan time.Time)
 	var out bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(ctx, sess, lib, cfg, "en", keyCh, tick, &out, &out) }()
+	go func() { done <- watchLoop(ctx, sess, lib, cfg, keyCh, tick, &out, &out) }()
 	time.Sleep(30 * time.Millisecond)
 	if called.Load() != 1 {
 		t.Fatalf("quiz handler called %d times", called.Load())
@@ -449,7 +449,7 @@ func TestWatchLoopQuizDoesNotPrintVerifyingStatus(t *testing.T) {
 	keyCh := make(chan byte, 1)
 	keyCh <- '\n'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if strings.Contains(out.String(), "verifying") {
@@ -486,7 +486,7 @@ func TestWatchLoopQuizResetKeysPause(t *testing.T) {
 				keyCh <- 'q'
 			}()
 			var out bytes.Buffer
-			if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+			if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 				t.Fatalf("watchLoop: %v", err)
 			}
 			if sess.Current() == nil || sess.Current().FullID() != "c1/e1" {
@@ -523,7 +523,7 @@ func TestWatchLoopQuizListOpensPicker(t *testing.T) {
 		keyCh <- 'q'  // quit the watch loop
 	}()
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if sess.Current() == nil || sess.Current().FullID() != "c2/e2" {
@@ -552,7 +552,7 @@ func TestWatchLoopQuizCleanQuit(t *testing.T) {
 	keyCh := make(chan byte, 1)
 	keyCh <- '\n'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if len(eng.destroyed) != 1 || eng.destroyed[0] != "c1" {
@@ -587,7 +587,7 @@ func TestWatchLoopEnterStartsQuiz(t *testing.T) {
 	keyCh := make(chan byte, 1)
 	keyCh <- '\n'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if called.Load() != 1 {
@@ -621,7 +621,7 @@ func TestWatchLoopDrainsTypeAheadAfterQuiz(t *testing.T) {
 	byteCh <- 'h'
 	byteCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", byteCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, byteCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if strings.Contains(out.String(), "UNIQUE_HINT_MARKER") {
@@ -672,7 +672,7 @@ func TestWatchLoopNavigationAtEnd(t *testing.T) {
 	keyCh <- 'q'
 	tick := make(chan time.Time)
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "no exercise in that direction") {
@@ -700,7 +700,7 @@ func TestWatchLoopEscCancelsVerify(t *testing.T) {
 	tick := make(chan time.Time)
 	var out, errOut bytes.Buffer
 	done := make(chan error, 1)
-	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, tick, &out, &errOut) }()
+	go func() { done <- watchLoop(context.Background(), sess, lib, cfg, keyCh, tick, &out, &errOut) }()
 
 	keyCh <- '\n' // start verification; it blocks until canceled
 	select {
@@ -763,7 +763,7 @@ func TestClassifyEsc(t *testing.T) {
 
 func twoChapterWatchLibrary(t *testing.T) (*content.Library, *state.State) {
 	t.Helper()
-	ch1 := &content.Chapter{ID: "c1", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab1"}
+	ch1 := &content.Chapter{ID: "c1", Title: "交换", TopologyPath: "c1/topology.clab.yml", TopologyName: "lab1"}
 	e1 := &content.Exercise{ID: "e1", Chapter: "c1", ChapterRef: ch1}
 	ch1.Exercises = []*content.Exercise{e1}
 	ch2 := &content.Chapter{ID: "c2", TopologyPath: "c2/topology.clab.yml", TopologyName: "lab2"}
@@ -802,7 +802,7 @@ func TestWatchLoopListCancelKeepsCurrent(t *testing.T) {
 		keyCh <- 'q'
 	}()
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if sess.Current() == nil || sess.Current().FullID() != "c1/e1" {
@@ -839,7 +839,7 @@ func TestWatchLoopListJumpDeploysTargetOnly(t *testing.T) {
 	keyCh <- '\r' // jump
 	keyCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if sess.Current() == nil || sess.Current().FullID() != "c2/e2" {
@@ -872,7 +872,7 @@ func TestWatchLoopHintReprintsLegend(t *testing.T) {
 	keyCh <- 'h'
 	keyCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	s := out.String()
@@ -909,7 +909,7 @@ func TestWatchLoopConceptReprintsContext(t *testing.T) {
 	keyCh <- 'c'
 	keyCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	s := out.String()
@@ -943,7 +943,7 @@ func TestWatchLoopListCurrentExerciseShowsHint(t *testing.T) {
 	keyCh <- '\r' // Enter on the current exercise
 	keyCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	if !strings.Contains(out.String(), "already on c1/e1") {
@@ -970,7 +970,7 @@ func TestWatchLoopListJumpPrivilegeErrorShowsHint(t *testing.T) {
 	keyCh <- '\r'
 	keyCh <- 'q'
 	var out bytes.Buffer
-	if err := watchLoop(context.Background(), sess, lib, cfg, "en", keyCh, make(chan time.Time), &out, &out); err != nil {
+	if err := watchLoop(context.Background(), sess, lib, cfg, keyCh, make(chan time.Time), &out, &out); err != nil {
 		t.Fatalf("watchLoop: %v", err)
 	}
 	s := out.String()

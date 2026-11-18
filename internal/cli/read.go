@@ -30,8 +30,7 @@ func newReadCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			loc := locale(cmd.ErrOrStderr())
-			lib, err := content.LoadWithLocale(resolved, loc)
+			lib, err := content.Load(resolved)
 			if err != nil {
 				return err
 			}
@@ -53,55 +52,44 @@ func newReadCmd() *cobra.Command {
 			if ch == nil {
 				return fmt.Errorf("no chapter found")
 			}
-			return printChapterRead(cmd.OutOrStdout(), ch, loc)
+			return printChapterRead(cmd.OutOrStdout(), ch)
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "library root (default: search upward for clablings.yaml)")
 	return cmd
 }
 
-type readLabels struct {
-	Objectives string
-	Reading    string
-	Intro      string
-	Question   string
-}
-
-func labelsFor(loc string) readLabels {
-	if content.NormalizeLocale(loc) == "zh" {
-		return readLabels{Objectives: "目标", Reading: "阅读", Intro: "导读", Question: "问题"}
-	}
-	return readLabels{Objectives: "Objectives", Reading: "Reading", Intro: "Intro", Question: "Question"}
-}
-
-func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
-	labels := labelsFor(loc)
+func printChapterRead(w io.Writer, ch *content.Chapter) error {
+	const objectivesLabel = "目标"
+	const readingLabel = "阅读"
+	const introLabel = "导读"
+	const questionLabel = "问题"
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s: %s\n\n", ch.ID, ch.Title)
 	if len(ch.Objectives) > 0 {
-		fmt.Fprintf(&b, "## %s\n\n", labels.Objectives)
+		fmt.Fprintf(&b, "## %s\n\n", objectivesLabel)
 		for _, o := range ch.Objectives {
 			fmt.Fprintf(&b, "- %s\n", o)
 		}
 		b.WriteString("\n")
 	}
-	if concept := readConceptFile(ch.Dir, loc); concept != "" {
+	if concept := readConceptFile(ch.Dir); concept != "" {
 		b.WriteString(stripLeadingHeading(concept))
 		if !strings.HasSuffix(b.String(), "\n") {
 			b.WriteByte('\n')
 		}
 		b.WriteByte('\n')
 	}
-	readings, err := content.LoadReading(ch.Dir, loc)
+	readings, err := content.LoadReading(ch.Dir)
 	if err != nil {
 		return err
 	}
 	if len(readings) > 0 {
-		fmt.Fprintf(&b, "## %s\n\n", labels.Reading)
+		fmt.Fprintf(&b, "## %s\n\n", readingLabel)
 		for _, r := range readings {
 			kind := ""
 			if r.Kind != "" {
-				kind = " (" + r.Kind + ")"
+				kind = " (" + readingKindLabel(r.Kind) + ")"
 			}
 			section := ""
 			if r.Section != "" {
@@ -116,14 +104,25 @@ func printChapterRead(w io.Writer, ch *content.Chapter, loc string) error {
 				fmt.Fprintf(&b, "  - %s\n", r.URL)
 			}
 			if r.Intro != "" {
-				fmt.Fprintf(&b, "  - %s: %s\n", labels.Intro, r.Intro)
+				fmt.Fprintf(&b, "  - %s: %s\n", introLabel, r.Intro)
 			}
 			if r.Question != "" {
-				fmt.Fprintf(&b, "  - %s: %s\n", labels.Question, r.Question)
+				fmt.Fprintf(&b, "  - %s: %s\n", questionLabel, r.Question)
 			}
 		}
 	}
 	return renderMarkdown(w, b.String())
+}
+
+func readingKindLabel(kind string) string {
+	switch kind {
+	case "required":
+		return "必读"
+	case "optional":
+		return "选读"
+	default:
+		return kind
+	}
 }
 
 // stripLeadingHeading drops a leading `# ...` title line from a concept body,
@@ -327,13 +326,10 @@ func renderMarkdown(w io.Writer, md string) error {
 	return err
 }
 
-// readConceptFile returns concept.<locale>.md with fallback to the default
-// language, then concept.md.
-func readConceptFile(dir, loc string) string {
-	for _, name := range []string{"concept." + loc + ".md", "concept." + content.DefaultLocale + ".md", "concept.md"} {
-		if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
-			return string(b)
-		}
+// readConceptFile returns the single Chinese concept file.
+func readConceptFile(dir string) string {
+	if b, err := os.ReadFile(filepath.Join(dir, "concept.md")); err == nil {
+		return string(b)
 	}
 	return ""
 }

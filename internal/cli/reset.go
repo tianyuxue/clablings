@@ -40,7 +40,7 @@ func newResetCmd() *cobra.Command {
 }
 
 func runReset(ctx context.Context, root, id string, hard bool) error {
-	lib, err := content.LoadWithLocale(root, locale(os.Stderr))
+	lib, err := content.Load(root)
 	if err != nil {
 		return err
 	}

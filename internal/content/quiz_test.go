@@ -9,9 +9,9 @@ func TestLoadQuiz(t *testing.T) {
 	root := writeLib(t, map[string]string{
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
 		"chapters/c1/chapter.yaml":               "id: c1\ntitle: Concepts\n",
-		"chapters/c1/exercises/q1/exercise.yaml": "id: q1\ntype: quiz\ntitle: Why STP\ntimeout: 30s\nquestions:\n  - prompt: {en: \"What breaks first?\", zh: 先坏什么？}\n    multiple: false\n    options:\n      - text: {en: Storm, zh: 风暴}\n        correct: true\n        explanation: {en: loops flood, zh: 环路泛洪}\n      - text: {en: Nothing, zh: 没事}\n        correct: false\n        explanation: {en: nope, zh: 不对}\n",
+		"chapters/c1/exercises/q1/exercise.yaml": "id: q1\ntype: quiz\ntitle: Why STP\nbrief: 关于 STP\ntimeout: 30s\nquestions:\n  - prompt: 先坏什么？ # removed-map: \"What breaks first?\", zh: 先坏什么？}\n    multiple: false\n    options:\n      - text: 风暴\n        correct: true\n        explanation: 环路泛洪\n      - text: 没事\n        correct: false\n        explanation: 不对\n",
 	})
-	lib, err := LoadWithLocale(root, "zh")
+	lib, err := Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -27,6 +27,9 @@ func TestLoadQuiz(t *testing.T) {
 
 func TestQuizValidationErrors(t *testing.T) {
 	base := func(exerciseYAML string) map[string]string {
+		if !strings.Contains(exerciseYAML, "\nbrief:") {
+			exerciseYAML = strings.Replace(exerciseYAML, "\ntitle: t\n", "\ntitle: t\nbrief: b\n", 1)
+		}
 		return map[string]string{
 			"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
 			"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\n",
@@ -40,27 +43,27 @@ func TestQuizValidationErrors(t *testing.T) {
 	}{
 		{
 			name: "no questions",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions: []\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions: []\n",
 			want: "at least one question",
 		},
 		{
 			name: "too few options",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n",
 			want: "at least two options",
 		},
 		{
 			name: "no correct option",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n      - text: b\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options:\n      - text: a\n      - text: b\n",
 			want: "needs a correct option",
 		},
 		{
 			name: "single choice with two correct",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: false\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    multiple: false\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n",
 			want: "exactly one correct",
 		},
 		{
 			name: "questions on non-quiz",
-			body: "id: q1\ntype: config-fix\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
+			body: "id: q1\ntype: config-fix\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
 			want: "only allowed for quiz",
 		},
 		{
@@ -70,17 +73,17 @@ func TestQuizValidationErrors(t *testing.T) {
 		},
 		{
 			name: "empty prompt",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - options:\n      - text: a\n        correct: true\n      - text: b\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - options:\n      - text: a\n        correct: true\n      - text: b\n",
 			want: "missing a prompt",
 		},
 		{
 			name: "empty option text",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: \"\"\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    options:\n      - text: a\n        correct: true\n      - text: \"\"\n",
 			want: "missing text",
 		},
 		{
 			name: "multiple with one correct",
-			body: "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
+			body: "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n",
 			want: "at least two correct",
 		},
 	}
@@ -98,7 +101,7 @@ func TestLoadQuizMultipleChoice(t *testing.T) {
 	root := writeLib(t, map[string]string{
 		"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
 		"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\n",
-		"chapters/c1/exercises/q1/exercise.yaml": "id: q1\ntype: quiz\ntitle: t\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n      - text: c\n        correct: false\n",
+		"chapters/c1/exercises/q1/exercise.yaml": "id: q1\ntype: quiz\ntitle: t\nbrief: b\nquestions:\n  - prompt: p\n    multiple: true\n    options:\n      - text: a\n        correct: true\n      - text: b\n        correct: true\n      - text: c\n        correct: false\n",
 	})
 	lib, err := Load(root)
 	if err != nil {

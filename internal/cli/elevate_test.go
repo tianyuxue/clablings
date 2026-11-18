@@ -57,13 +57,11 @@ func TestSudoArgv(t *testing.T) {
 	argv := sudoArgv("/usr/local/bin/clablings", []string{"watch", "--sudo"}, map[string]string{
 		"CLABLINGS_ROOT":     "/lib",
 		"CLABLINGS_INSTANCE": "inst",
-		"CLABLINGS_LANG":     "en",
 	})
 	want := []string{
 		"sudo",
 		"CLABLINGS_ROOT=/lib",
 		"CLABLINGS_INSTANCE=inst",
-		"CLABLINGS_LANG=en",
 		"/usr/local/bin/clablings",
 		"watch",
 	}
@@ -73,9 +71,8 @@ func TestSudoArgv(t *testing.T) {
 
 	argv = sudoArgv("/bin/clablings", []string{"version"}, map[string]string{
 		"CLABLINGS_ROOT": "",
-		"CLABLINGS_LANG": "zh",
 	})
-	want = []string{"sudo", "CLABLINGS_LANG=zh", "/bin/clablings", "version"}
+	want = []string{"sudo", "/bin/clablings", "version"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Fatalf("sudoArgv = %v, want %v", argv, want)
 	}

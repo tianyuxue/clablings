@@ -26,27 +26,20 @@ func newLintCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			warns, err := content.MissingTranslations(resolved, "zh")
+			legacyProblems, err := content.LegacyLocalizedFiles(resolved)
 			if err != nil {
 				return err
 			}
-			parityProblems, err := content.TranslationParity(resolved, "zh")
-			if err != nil {
-				return err
-			}
-			problems = append(problems, parityProblems...)
+			problems = append(problems, legacyProblems...)
 			out := cmd.OutOrStdout()
 			for _, p := range problems {
 				fmt.Fprintln(out, "error: "+p)
 			}
-			for _, w := range warns {
-				fmt.Fprintln(out, "warning: "+w)
-			}
 			if len(problems) > 0 {
-				fmt.Fprintf(out, "%d problem(s), %d warning(s)\n", len(problems), len(warns))
+				fmt.Fprintf(out, "%d problem(s), 0 warning(s)\n", len(problems))
 				return &exitCodeError{code: 1}
 			}
-			fmt.Fprintf(out, "ok: %d warning(s)\n", len(warns))
+			fmt.Fprintln(out, "ok: 0 warning(s)")
 			return nil
 		},
 	}
@@ -55,7 +48,7 @@ func newLintCmd() *cobra.Command {
 }
 
 func lintLibrary(root string) ([]string, error) {
-	lib, err := content.LoadWithLocale(root, content.DefaultLocale)
+	lib, err := content.Load(root)
 	if err != nil {
 		return nil, err
 	}
