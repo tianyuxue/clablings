@@ -23,7 +23,7 @@ func newListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			lib, err := content.LoadWithLocale(resolved, locale(cmd.ErrOrStderr()))
+			lib, err := content.Load(resolved)
 			if err != nil {
 				return err
 			}

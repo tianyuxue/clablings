@@ -18,6 +18,9 @@ func writeDebugLibrary(t *testing.T) (root string) {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
+		if strings.HasSuffix(rel, "exercise.yaml") && !strings.Contains(s, "\nbrief:") {
+			s = strings.Replace(s, "\ntype:", "\nbrief: 测试题目\ntype:", 1)
+		}
 		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -142,6 +145,9 @@ func TestDebugErrorsOnChapterWithoutTopology(t *testing.T) {
 		p := filepath.Join(root, rel)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
+		}
+		if strings.HasSuffix(rel, "exercise.yaml") && !strings.Contains(s, "\nbrief:") {
+			s = strings.Replace(s, "\ntype:", "\nbrief: 测试题目\ntype:", 1)
 		}
 		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
 			t.Fatal(err)

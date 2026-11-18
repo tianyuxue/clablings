@@ -11,12 +11,49 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Load parses the library using the default locale.
-func Load(root string) (*Library, error) { return LoadWithLocale(root, DefaultLocale) }
+// chapterYAML is the on-disk shape of chapter.yaml.
+type chapterYAML struct {
+	Title            string   `yaml:"title"`
+	Objectives       []string `yaml:"objectives"`
+	Difficulty       int      `yaml:"difficulty"`
+	Tags             []string `yaml:"tags"`
+	EstimatedMinutes int      `yaml:"estimated_minutes"`
+	Prerequisites    []string `yaml:"prerequisites"`
+	Chapter          `yaml:",inline"`
+}
 
-// LoadWithLocale parses the library, resolving human text to locale.
-func LoadWithLocale(root, locale string) (*Library, error) {
-	locale = NormalizeLocale(locale)
+// exerciseYAML is the on-disk shape of exercise.yaml.
+type exerciseYAML struct {
+	Title      string          `yaml:"title"`
+	Brief      string          `yaml:"brief"`
+	Hints      []string        `yaml:"hints"`
+	Assertions []assertionYAML `yaml:"assertions"`
+	Questions  []questionYAML  `yaml:"questions"`
+	Difficulty int             `yaml:"difficulty"`
+	Tags       []string        `yaml:"tags"`
+	Exercise   `yaml:",inline"`
+}
+
+type optionYAML struct {
+	Text        string `yaml:"text"`
+	Explanation string `yaml:"explanation"`
+	Correct     bool   `yaml:"correct"`
+}
+
+type questionYAML struct {
+	Prompt   string       `yaml:"prompt"`
+	Multiple bool         `yaml:"multiple"`
+	Options  []optionYAML `yaml:"options"`
+}
+
+type assertionYAML struct {
+	Name      string `yaml:"name"`
+	Hint      string `yaml:"hint"`
+	Assertion `yaml:",inline"`
+}
+
+// Load parses the library.
+func Load(root string) (*Library, error) {
 	manifest, err := loadManifest(filepath.Join(root, ManifestName))
 	if err != nil {
 		return nil, err
@@ -32,7 +69,7 @@ func LoadWithLocale(root, locale string) (*Library, error) {
 
 	for _, rel := range manifest.Chapters {
 		chDir := filepath.Join(root, rel)
-		ch, err := loadChapter(chDir, locale)
+		ch, err := loadChapter(chDir)
 		if err != nil {
 			return nil, fmt.Errorf("chapter %s: %w", rel, err)
 		}
@@ -54,7 +91,7 @@ func LoadWithLocale(root, locale string) (*Library, error) {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			ex, err := loadExercise(filepath.Join(exDir, name), locale)
+			ex, err := loadExercise(filepath.Join(exDir, name))
 			if err != nil {
 				return nil, fmt.Errorf("exercise %s/%s: %w", ch.ID, name, err)
 			}
@@ -85,14 +122,14 @@ func loadManifest(path string) (Manifest, error) {
 	return m, nil
 }
 
-func loadChapter(dir, locale string) (*Chapter, error) {
+func loadChapter(dir string) (*Chapter, error) {
 	var dto chapterYAML
 	if err := decodeYAML(filepath.Join(dir, "chapter.yaml"), &dto); err != nil {
 		return nil, err
 	}
 	ch := dto.Chapter
-	ch.Title = dto.Title.resolve(locale)
-	ch.Objectives = resolveLocalizedList(dto.Objectives, locale)
+	ch.Title = dto.Title
+	ch.Objectives = dto.Objectives
 	ch.Difficulty = dto.Difficulty
 	ch.Tags = dto.Tags
 	ch.EstimatedMinutes = dto.EstimatedMinutes
@@ -132,30 +169,30 @@ func readTopologyName(path string) (string, error) {
 	return raw.Name, nil
 }
 
-func loadExercise(dir, locale string) (*Exercise, error) {
+func loadExercise(dir string) (*Exercise, error) {
 	var dto exerciseYAML
 	if err := decodeYAML(filepath.Join(dir, "exercise.yaml"), &dto); err != nil {
 		return nil, err
 	}
 	ex := dto.Exercise
-	ex.Title = dto.Title.resolve(locale)
-	ex.Brief = dto.Brief.resolve(locale)
-	ex.Hints = resolveStrings(dto.Hints, locale)
+	ex.Title = dto.Title
+	ex.Brief = dto.Brief
+	ex.Hints = dto.Hints
 	ex.Difficulty = dto.Difficulty
 	ex.Tags = dto.Tags
 	if len(dto.Assertions) > 0 {
 		ex.Assertions = make([]Assertion, len(dto.Assertions))
 		for i := range dto.Assertions {
 			ex.Assertions[i] = dto.Assertions[i].Assertion
-			ex.Assertions[i].Name = dto.Assertions[i].Name.resolve(locale)
-			ex.Assertions[i].Hint = dto.Assertions[i].Hint.resolve(locale)
+			ex.Assertions[i].Name = dto.Assertions[i].Name
+			ex.Assertions[i].Hint = dto.Assertions[i].Hint
 		}
 	}
 	if len(dto.Questions) > 0 {
 		ex.Questions = make([]Question, len(dto.Questions))
 		for i := range dto.Questions {
 			q := Question{
-				Prompt:   dto.Questions[i].Prompt.resolve(locale),
+				Prompt:   dto.Questions[i].Prompt,
 				Multiple: dto.Questions[i].Multiple,
 			}
 			if n := len(dto.Questions[i].Options); n > 0 {
@@ -163,14 +200,20 @@ func loadExercise(dir, locale string) (*Exercise, error) {
 				for j := range dto.Questions[i].Options {
 					o := dto.Questions[i].Options[j]
 					q.Options[j] = Option{
-						Text:        o.Text.resolve(locale),
-						Explanation: o.Explanation.resolve(locale),
+						Text:        o.Text,
+						Explanation: o.Explanation,
 						Correct:     o.Correct,
 					}
 				}
 			}
 			ex.Questions[i] = q
 		}
+	}
+	if strings.TrimSpace(ex.Title) == "" {
+		return nil, fmt.Errorf("exercise %s: missing title", ex.ID)
+	}
+	if strings.TrimSpace(ex.Brief) == "" {
+		return nil, fmt.Errorf("exercise %s: missing brief", ex.ID)
 	}
 	if ex.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)

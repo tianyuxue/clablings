@@ -1,30 +1,30 @@
-name: Feature request
-description: Suggest an idea for clablings
+name: 功能建议
+description: 为 clablings 提出建议
 title: "feat: "
 labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What are you trying to do that is currently hard or impossible?
+      label: 问题
+      description: 你想完成什么目前很困难或无法完成的事情？
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed solution
+      label: 建议方案
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered
+      label: 考虑过的替代方案
     validations:
       required: false
   - type: textarea
     id: context
     attributes:
-      label: Additional context
+      label: 补充信息
     validations:
       required: false

@@ -53,8 +53,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	clabBin := binOr(cfg.Containerlab.BinPath, "containerlab")
 	dockerBin := binOr(cfg.Docker.BinPath, "docker")
 
-	loc := locale(errOut)
-	lib, err := content.LoadWithLocale(root, loc)
+	lib, err := content.Load(root)
 	if err != nil {
 		return err
 	}
@@ -89,7 +88,7 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 		byteCh = make(chan byte, 256)
 		go watch.ReadBytes(os.Stdin, byteCh)
 		quizHandler = func(qctx context.Context, ex *content.Exercise) ([]assert.Result, error) {
-			return runQuiz(qctx, byteCh, out, ex, loc)
+			return runQuiz(qctx, byteCh, out, ex)
 		}
 	}
 
@@ -121,12 +120,12 @@ func runWatch(ctx context.Context, root, initialID string, out, errOut io.Writer
 	defer ticker.Stop()
 
 	if rawActive {
-		return watchLoop(ctx, sess, lib, cfg, loc, byteCh, ticker.C, out, errOut)
+		return watchLoop(ctx, sess, lib, cfg, byteCh, ticker.C, out, errOut)
 	}
-	return watchLoop(ctx, sess, lib, cfg, loc, nil, ticker.C, out, errOut)
+	return watchLoop(ctx, sess, lib, cfg, nil, ticker.C, out, errOut)
 }
 
-func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, loc string, byteCh <-chan byte, tick <-chan time.Time, out, errOut io.Writer) error {
+func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, cfg *config.Config, byteCh <-chan byte, tick <-chan time.Time, out, errOut io.Writer) error {
 	var w *watch.Watcher
 	shown := ""
 	// keys is the real input channel. A quiz owns it while answering, so the
@@ -326,7 +325,7 @@ func watchLoop(ctx context.Context, sess *watch.Session, lib *content.Library, c
 					fmt.Fprintln(out, "no concept for this exercise")
 					continue
 				}
-				if err := printChapterRead(out, cur.ChapterRef, loc); err != nil {
+				if err := printChapterRead(out, cur.ChapterRef); err != nil {
 					fmt.Fprintf(errOut, "read error: %v\n", err)
 				}
 				// The concept can be long enough to scroll the exercise

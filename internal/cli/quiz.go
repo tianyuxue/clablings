@@ -20,9 +20,8 @@ import (
 var errQuizHelp = errors.New("quiz help requested")
 
 // runQuiz interactively asks each question until every answer is correct and
-// returns the final (all-correct) grading results. loc selects the language for
-// the `c` concept help.
-func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exercise, loc string) ([]assert.Result, error) {
+// returns the final (all-correct) grading results.
+func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exercise) ([]assert.Result, error) {
 	help := func(b byte) bool {
 		switch b {
 		case 'h', 'H':
@@ -30,7 +29,7 @@ func runQuiz(ctx context.Context, in <-chan byte, out io.Writer, ex *content.Exe
 			return true
 		case 'c', 'C':
 			if ex.ChapterRef != nil {
-				_ = printChapterRead(out, ex.ChapterRef, loc)
+				_ = printChapterRead(out, ex.ChapterRef)
 			}
 			return true
 		}

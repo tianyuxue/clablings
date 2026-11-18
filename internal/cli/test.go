@@ -116,7 +116,7 @@ func engineNeededFor(exs []*content.Exercise, skip func(*content.Exercise) bool)
 }
 
 func runHeadless(ctx context.Context, root, id string, all bool, answersPath, format string, cmd *cobra.Command) (int, error) {
-	lib, err := content.LoadWithLocale(root, locale(cmd.ErrOrStderr()))
+	lib, err := content.Load(root)
 	if err != nil {
 		return 2, err
 	}

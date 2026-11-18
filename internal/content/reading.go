@@ -22,32 +22,20 @@ type Reading struct {
 }
 
 type readingYAML struct {
-	Intro    localizedString `yaml:"intro"`
-	Question localizedString `yaml:"question"`
+	Intro    string `yaml:"intro"`
+	Question string `yaml:"question"`
 	Reading  `yaml:",inline"`
 }
 
-// LoadReading loads reading.<locale>.yaml for a chapter directory, falling back
-// to reading.<DefaultLocale>.yaml. A missing file yields (nil, nil).
-func LoadReading(chapterDir, locale string) ([]Reading, error) {
-	locale = NormalizeLocale(locale)
-	candidates := []string{
-		filepath.Join(chapterDir, "reading."+locale+".yaml"),
-		filepath.Join(chapterDir, "reading."+DefaultLocale+".yaml"),
-	}
-	var data []byte
-	for _, p := range candidates {
-		b, err := os.ReadFile(p)
-		if err == nil {
-			data = b
-			break
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("read %s: %w", p, err)
-		}
-	}
-	if data == nil {
+// LoadReading loads reading.yaml for a chapter directory. A missing file yields (nil, nil).
+func LoadReading(chapterDir string) ([]Reading, error) {
+	path := filepath.Join(chapterDir, "reading.yaml")
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	var raw []readingYAML
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -56,8 +44,8 @@ func LoadReading(chapterDir, locale string) ([]Reading, error) {
 	out := make([]Reading, 0, len(raw))
 	for _, r := range raw {
 		rd := r.Reading
-		rd.Intro = r.Intro.resolve(locale)
-		rd.Question = r.Question.resolve(locale)
+		rd.Intro = r.Intro
+		rd.Question = r.Question
 		out = append(out, rd)
 	}
 	return out, nil
