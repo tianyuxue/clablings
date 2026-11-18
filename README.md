@@ -129,7 +129,6 @@ quiz 答题时，`h`/`c` 用作帮助，`p`/`n`/`l`/`r`/`f`/`q`/`x` 保持 watch
 可选配置文件：`~/.config/clablings/config.yaml`
 
 ```yaml
-language: zh             # 内容语言：en 或 zh（默认 zh）
 containerlab:
   bin_path: ""          # 留空 = 从 PATH 查找
 docker:

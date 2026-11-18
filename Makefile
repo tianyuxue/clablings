@@ -90,7 +90,7 @@ package: distclean
 		echo "building $$name"; \
 		mkdir -p $$dir; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GOBUILD) -trimpath -tags netgo,osusergo -ldflags '$(STATIC_LDFLAGS)' -o $$dir/$(BINARY) ./cmd/$(BINARY)/ || exit 1; \
-		cp README.md README.zh-CN.md LICENSE $$dir/; \
+		cp README.md LICENSE $$dir/; \
 		tar -C $(DIST) -czf $(DIST)/$$name.tar.gz $$name || exit 1; \
 		rm -rf $$dir; \
 		(cd $(DIST) && sha256sum $$name.tar.gz >> checksums.txt); \

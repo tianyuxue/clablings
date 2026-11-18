@@ -209,6 +209,12 @@ func loadExercise(dir string) (*Exercise, error) {
 			ex.Questions[i] = q
 		}
 	}
+	if strings.TrimSpace(ex.Title) == "" {
+		return nil, fmt.Errorf("exercise %s: missing title", ex.ID)
+	}
+	if strings.TrimSpace(ex.Brief) == "" {
+		return nil, fmt.Errorf("exercise %s: missing brief", ex.ID)
+	}
 	if ex.ID == "" {
 		return nil, fmt.Errorf("%s: missing id", dir)
 	}

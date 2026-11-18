@@ -291,3 +291,24 @@ func TestLoadExerciseNilAssertions(t *testing.T) {
 		t.Fatalf("assertions = %v, want nil", got)
 	}
 }
+
+func TestLoadRejectsEmptyTitleAndBrief(t *testing.T) {
+	base := func(exercise string) map[string]string {
+		return map[string]string{
+			"clablings.yaml":                         "version: 1\nchapters:\n  - chapters/c1\n",
+			"chapters/c1/chapter.yaml":               "id: c1\ntitle: t\n",
+			"chapters/c1/exercises/e1/exercise.yaml": exercise,
+		}
+	}
+	for _, tt := range []struct{ name, body, want string }{
+		{"title", "id: e1\ntype: config-fix\nbrief: b\n", "missing title"},
+		{"brief", "id: e1\ntype: config-fix\ntitle: t\n", "missing brief"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeLib(t, base(tt.body)))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
